@@ -1,24 +1,29 @@
 {
-  "name": "amdbusbot",
+  "name": "my-pagebot",
   "version": "1.0.0",
-  "description": "Multi-AI Facebook Messenger bot with image, file, and web capabilities",
+  "description": "Facebook Messenger Page Bot by Sethdico",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js"
   },
-  "keywords": ["facebook", "messenger", "bot", "ai", "chipp"],
+  "keywords": ["messenger", "facebook", "bot", "ai"],
   "author": "Sethdico",
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0 <=22.x"
+  },
   "dependencies": {
+    "express": "^4.21.1",
+    "body-parser": "^1.20.3",
     "axios": "^1.7.7",
     "form-data": "^4.0.1",
-    "express": "^4.21.1"
+    "fs-extra": "^11.3.0",
+    "gradient-string": "^2.0.2",
+    "chalk": "^5.3.0",
+    "fontstyles": "^1.2.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
-  },
-  "engines": {
-    "node": ">=18.0.0"
   }
 }
