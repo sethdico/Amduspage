@@ -1,16 +1,16 @@
 {
-      "PAGE_ACCESS_TOKEN": "YOUR_PAGE_ACCESS_TOKEN_HERE",
-        "VERIFY_TOKEN": "your_random_verify_token",
-          "PREFIX": "!",
-            "ADMINS": ["YOUR_FACEBOOK_USER_ID"],
-              "BOTNAME": "MyBot",
-                "markAsSeen": true,
-                  "selfListen": false,
-                    "clearData": false,
-                      "THEME_SETUP": {
-                          "THEME": "Fiery",
-                              "ADMIN": "Your Name",
-                                  "TITLE": "MYBOT"
-                                    }
-                                    }
+  "PAGE_ACCESS_TOKEN": "PASTE_YOUR_LONG_FB_TOKEN_HERE",
+  "VERIFY_TOKEN": "PASTE_YOUR_SECRET_PASSWORD_HERE",
+  "ADMINS": ["123456789"],
+  "PREFIX": "!",
+  "BOTNAME": "Pagebot",
+  "clearData": false,
+  "markAsSeen": true,
+  "selfListen": false,
+  "THEME_SETUP": {
+    "THEME": "Fiery",
+    "ADMIN": "Admin",
+    "TITLE": "PAGEBOT",
+    "HTML": ["#bc6107", "#fe8916", "#ff952a"]
+  }
 }
