@@ -1,17 +1,66 @@
+const express = require("express");
 const path = require("path");
 const gradient = require("gradient-string");
 const chalk = require("chalk");
 
-function html(res) { res.sendFile(path.join(__dirname, "index.html")); }
+const app = express();
 
-function verify(req, res) {
-  const config = require("../config.json");
-  if (req.query["hub.mode"] === "subscribe" && req.query["hub.verify_token"] === config.VERIFY_TOKEN) {
-    res.status(200).send(req.query["hub.challenge"]);
-  } else { res.sendStatus(403); }
+// === ASCII MAPPINGS (for terminal banner) ===
+const asciiMappings = {
+  a: { upper: " ▄▄▄  ", lower: "█   █ " },
+  b: { upper: "█▀▀█  ", lower: "█▄▄█▄ " },
+  c: { upper: " ▄▄▄  ", lower: "█     " },
+  d: { upper: "█▀▀█  ", lower: "█  ▀█ " },
+  e: { upper: "█████ ", lower: "█     " },
+  f: { upper: "█████ ", lower: "█     " },
+  g: { upper: " ▄▄▄  ", lower: "█ █▄█ " },
+  h: { upper: "█   █ ", lower: "█████ " },
+  i: { upper: "█ ", lower: "█ " },
+  j: { upper: "  █ ", lower: "█▀▀█ " },
+  k: { upper: "█  █ ", lower: "█▄█  " },
+  l: { upper: "█    ", lower: "█    " },
+  m: { upper: "█▀ ▀█", lower: "█   █" },
+  n: { upper: "█   █", lower: "█   █" },
+  o: { upper: " ▄▄▄ ", lower: "█   █" },
+  p: { upper: "████ ", lower: "█    " },
+  q: { upper: " ▄▄▄ ", lower: "█ ▄ █" },
+  r: { upper: "████ ", lower: "█ █  " },
+  s: { upper: " ▄▄▄▄", lower: "█    " },
+  t: { upper: "█████", lower: "  █  " },
+  u: { upper: "█   █", lower: "█▄▄▄█" },
+  v: { upper: "█   █", lower: " █ █ " },
+  w: { upper: "█   █", lower: "█ █ █" },
+  x: { upper: "█   █", lower: " █ █ " },
+  y: { upper: "█   █", lower: " █▀▀ " },
+  z: { upper: "█████", lower: "    █" },
+  " ": { upper: "      ", lower: "      " }
+};
+
+function generateAsciiArt(text) {
+  const title = (text || "PAGEBOT").toLowerCase();
+  let line1 = "", line2 = "";
+  for (const char of title) {
+    const map = asciiMappings[char] || { upper: "      ", lower: "      " };
+    line1 += map.upper;
+    line2 += map.lower;
+  }
+  return `\n${line1}\n${line2}\n`;
 }
 
-function log() { console.log(gradient.fruit("BOT STARTED")); }
-function getTheme() { return { gradient: gradient.fruit, color: chalk.red }; }
+// === WEB SERVER ===
+app.use(express.static(path.join(__dirname, "public")));
 
-module.exports = { html, verify, log, getTheme };
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+function startWeb(port) {
+  app.listen(port, () => {
+    const banner = generateAsciiArt("Amdusbot");
+    const grad = gradient("cyan", "magenta");
+    console.log(grad(banner));
+    console.log(chalk.green(`🌐 Web server running on http://localhost:${port}`));
+  });
+}
+
+module.exports = { app, startWeb };
