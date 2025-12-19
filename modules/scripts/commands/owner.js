@@ -1,7 +1,7 @@
 module.exports.config = {
   name: "owner",
   author: "Sethdico",
-  version: "1.0",
+  version: "1.1",
   category: "Utility",
   description: "Contact the owner",
   adminOnly: false,
@@ -9,12 +9,11 @@ module.exports.config = {
   cooldown: 5,
 };
 
-module.exports.run = function ({ event }) {
-  // You can change the URL to your own Facebook profile
+module.exports.run = async function ({ event }) {
   const buttons = [
     {
       type: "web_url",
-      url: "https://www.facebook.com/seth09asher", // CHANGE THIS TO YOUR LINK
+      url: "https://www.facebook.com/seth09asher", // ✅ Updated Link
       title: "Add Seth"
     },
     {
@@ -24,9 +23,14 @@ module.exports.run = function ({ event }) {
     }
   ];
 
-  api.sendButton(
-    "👑 **Bot Owner**\n━━━━━━━━━━━━━━━━\nThis bot was created by Seth Asher Salinguhay.\nContact me for issues:",
-    buttons,
-    event.sender.id
-  );
+  try {
+      await api.sendButton(
+        "👑 **Bot Owner**\n━━━━━━━━━━━━━━━━\nThis bot was created by Seth Asher Salinguhay.\nContact me for issues:",
+        buttons,
+        event.sender.id
+      );
+  } catch (e) {
+      // Fallback message if buttons fail (e.g. on some mobile versions)
+      api.sendMessage("👑 **Owner:** Seth Asher Salinguhay\nFB: facebook.com/seth09asher", event.sender.id);
+  }
 };
