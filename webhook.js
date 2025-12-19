@@ -1,39 +1,50 @@
-const config = require("./config.json");
-const utils = require("./modules/utils");
 const fs = require("fs");
+const path = require("path");
+const messagesCache = {};
 
-let messagesCache = {};
-const messagesFilePath = "./page/data.json";
+module.exports = (req, res) => {
+    if (req.method !== "POST") return res.sendStatus(405);
 
-// Load cache if exists
-if (!config.clearData && fs.existsSync(messagesFilePath)) {
-  try { messagesCache = JSON.parse(fs.readFileSync(messagesFilePath, "utf8")); } catch (e) {}
-}
+    const data = req.body;
+    if (!data?.object || data.object !== "page") return res.sendStatus(400);
 
-function writeToFile() {
-  fs.writeFileSync(messagesFilePath, JSON.stringify(messagesCache, null, 2), "utf8");
-}
+    const entries = data.entry || [];
+    for (const entry of entries) {
+        const messaging = entry.messaging || [];
+        for (const event of messaging) {
+            if (event.message) {
+                const senderId = event.sender.id;
+                const mid = event.message.mid;
 
-module.exports.listen = function (event) {
-  try {
-    if (event.object === "page") {
-      event.entry.forEach((entry) => {
-        entry.messaging.forEach(async (ev) => {
-          ev.type = await utils.getEventType(ev);
-          global.PAGE_ACCESS_TOKEN = config.PAGE_ACCESS_TOKEN;
-          
-          // Simple caching
-          if (ev.message && ev.message.mid) {
-             messagesCache[ev.message.mid] = { text: ev.message.text };
-             writeToFile();
-          }
+                if (mid) {
+                    // Initialize cache object if not exists
+                    if (!messagesCache[mid]) messagesCache[mid] = {};
 
-          if (config.selfListen && ev?.message?.is_echo) return;
-          
-          utils.log(ev);
-          require("./page/main")(ev);
-        });
-      });
+                    // Only store what's present
+                    if (typeof event.message.text !== 'undefined') {
+                        messagesCache[mid].text = event.message.text;
+                    }
+
+                    if (event.message.attachments && event.message.attachments.length > 0) {
+                        messagesCache[mid].attachments = event.message.attachments;
+                    }
+
+                    // Save to data.json as fallback for replies
+                    const dataPath = path.join(__dirname, "..", "data.json");
+                    let existingData = {};
+                    if (fs.existsSync(dataPath)) {
+                        try {
+                            existingData = JSON.parse(fs.readFileSync(dataPath, "utf8"));
+                        } catch (e) {
+                            console.error("Failed to read data.json:", e);
+                        }
+                    }
+                    existingData[mid] = messagesCache[mid];
+                    fs.writeFileSync(dataPath, JSON.stringify(existingData, null, 2));
+                }
+            }
+        }
     }
-  } catch (error) { console.error(error); }
+
+    res.sendStatus(200);
 };
