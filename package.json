@@ -1,20 +1,24 @@
 {
-  "name": "pagebot-render",
+  "name": "amdbusbot",
   "version": "1.0.0",
-  "description": "Simple Pagebot",
+  "description": "Multi-AI Facebook Messenger bot with image, file, and web capabilities",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
+  "keywords": ["facebook", "messenger", "bot", "ai", "chipp"],
+  "author": "Sethdico",
+  "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.0",
-    "body-parser": "^1.20.2",
-    "express": "^4.18.2",
-    "fs-extra": "^11.1.1",
-    "gradient-string": "^2.0.2",
-    "chalk": "^4.1.2",
-    "gpti": "^2.0.3",
-    "fontstyles": "^1.0.0",
-    "form-data": "^4.0.0"
+    "axios": "^1.7.7",
+    "form-data": "^4.0.1",
+    "express": "^4.21.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
