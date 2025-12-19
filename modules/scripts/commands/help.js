@@ -4,9 +4,9 @@ const path = require("path");
 module.exports.config = {
   name: "help",
   author: "Sethdico (Ported)",
-  version: "2.0",
+  version: "3.0",
   category: "Utility",
-  description: "Shows the command list or specific command usage.",
+  description: "List all commands.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 5,
@@ -17,19 +17,20 @@ module.exports.run = function ({ event, args }) {
   const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith(".js"));
 
   // ====================================================
-  // 1. SPECIFIC COMMAND HELP (e.g., "help ai")
+  // 1. SPECIFIC COMMAND HELP (e.g. "help ai")
   // ====================================================
   if (args[0]) {
     const cmdName = args[0].toLowerCase();
     let foundCmd = null;
 
     for (const file of commandFiles) {
-      const cmd = require(path.join(commandsPath, file));
-      // Check both name and aliases (if you decide to add aliases later)
-      if (cmd.config && (cmd.config.name === cmdName || (cmd.config.aliases && cmd.config.aliases.includes(cmdName)))) {
-        foundCmd = cmd.config;
-        break;
-      }
+      try {
+        const cmd = require(path.join(commandsPath, file));
+        if (cmd.config && (cmd.config.name === cmdName || (cmd.config.aliases && cmd.config.aliases.includes(cmdName)))) {
+          foundCmd = cmd.config;
+          break;
+        }
+      } catch (e) { continue; }
     }
 
     if (foundCmd) {
@@ -37,7 +38,7 @@ module.exports.run = function ({ event, args }) {
 ━━━━━━━━━━━━━━━━
 📝 **Desc:** ${foundCmd.description}
 📂 **Category:** ${foundCmd.category}
-⌨️ **Usage:** ${foundCmd.name} ${foundCmd.usage ? foundCmd.usage : "<text>"}
+⌨️ **Usage:** ${foundCmd.name} ${foundCmd.usage ? foundCmd.usage : ""}
 ⏱️ **Cooldown:** ${foundCmd.cooldown}s
 ━━━━━━━━━━━━━━━━`;
       return api.sendMessage(info, event.sender.id);
@@ -47,55 +48,44 @@ module.exports.run = function ({ event, args }) {
   }
 
   // ====================================================
-  // 2. GENERAL COMMAND LIST (Grouped by Category)
+  // 2. DYNAMIC LIST (Shows ALL files found)
   // ====================================================
   
-  // Define buckets for your commands
-  const groups = {
-    "AI": [],       // ai, aria, copilot, gemini, quillbot, venice
-    "Utility": [],  // define, help, remind, translate, uid, uptime, webpilot, you
-    "Fun": [],      // 48laws, bible, deepimg
-    "Other": []     // Fallback
-  };
+  const categories = {};
+  let totalCommands = 0;
 
-  // Sort commands into buckets
   for (const file of commandFiles) {
-    const cmd = require(path.join(commandsPath, file));
-    if (cmd.config && cmd.config.name) {
-      const cat = cmd.config.category || "Other";
-      
-      // Push to specific group or fallback to 'Other'
-      if (groups[cat]) {
-        groups[cat].push(cmd.config.name);
-      } else {
-        groups["Other"].push(cmd.config.name);
+    try {
+      const cmd = require(path.join(commandsPath, file));
+      if (cmd.config && cmd.config.name) {
+        const cat = cmd.config.category || "Uncategorized";
+        if (!categories[cat]) categories[cat] = [];
+        categories[cat].push(cmd.config.name);
+        totalCommands++;
       }
+    } catch (e) {
+      console.error(`Error loading ${file}:`, e);
     }
   }
 
-  // Construct the final message
-  let msg = `🤖 **Pagebot Command List**\n`;
-  msg += `━━━━━━━━━━━━━━━━\n`;
+  // Emoji Map for Categories
+  const icons = {
+    "AI": "🧠",
+    "Utility": "🛠️",
+    "Fun": "🎮",
+    "Admin": "🔒",
+    "Uncategorized": "📂"
+  };
 
-  if (groups["AI"].length > 0) {
-    msg += `🧠 **AI Assistants**\n${groups["AI"].join(", ")}\n\n`;
-  }
+  let msg = `🤖 **Pagebot Commands (${totalCommands})**\n━━━━━━━━━━━━━━━━\n`;
 
-  if (groups["Utility"].length > 0) {
-    msg += `🛠️ **Tools & Utilities**\n${groups["Utility"].join(", ")}\n\n`;
-  }
+  // Sort categories alphabetically and print
+  Object.keys(categories).sort().forEach(cat => {
+    const icon = icons[cat] || "📂"; // Use folder icon if category name doesn't match list
+    msg += `${icon} **${cat}**\n   ${categories[cat].join(", ")}\n\n`;
+  });
 
-  if (groups["Fun"].length > 0) {
-    msg += `🎮 **Fun & Random**\n${groups["Fun"].join(", ")}\n\n`;
-  }
-
-  if (groups["Other"].length > 0) {
-    msg += `📂 **Others**\n${groups["Other"].join(", ")}\n\n`;
-  }
-
-  msg += `━━━━━━━━━━━━━━━━\n`;
-  msg += `💡 Type "help <command>" for details.\n`;
-  msg += `Example: help ai`;
+  msg += `━━━━━━━━━━━━━━━━\n💡 Type "help <command>" for details.\nExample: help ai`;
 
   api.sendMessage(msg, event.sender.id);
 };
