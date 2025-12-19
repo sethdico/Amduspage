@@ -1,0 +1,16 @@
+{
+      "PAGE_ACCESS_TOKEN": "YOUR_PAGE_ACCESS_TOKEN_HERE",
+        "VERIFY_TOKEN": "your_random_verify_token",
+          "PREFIX": "!",
+            "ADMINS": ["YOUR_FACEBOOK_USER_ID"],
+              "BOTNAME": "MyBot",
+                "markAsSeen": true,
+                  "selfListen": false,
+                    "clearData": false,
+                      "THEME_SETUP": {
+                          "THEME": "Fiery",
+                              "ADMIN": "Your Name",
+                                  "TITLE": "MYBOT"
+                                    }
+                                    }
+}
