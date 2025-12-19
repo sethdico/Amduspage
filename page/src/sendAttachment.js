@@ -1,56 +1,65 @@
 const axios = require("axios");
-const FormData = require("form-data");
 const fs = require("fs");
+const path = require("path");
 
-module.exports = function (event) {
-  return async function sendAttachment(type, source, senderID) {
-    const recipientID = senderID || event.sender.id;
-    
-    // Facebook types: image, audio, video, file
-    // If it's not image/audio/video, force it to be "file" (for PDFs, DOCX, etc)
-    const validTypes = ['image', 'audio', 'video'];
-    const mediaType = validTypes.includes(type) ? type : 'file';
+module.exports = async function (type, source, threadID, messageID = null) {
+    const accessToken = global.accessToken;
+    const apiVersion = "v21.0";
+    const url = `https://graph.facebook.com/${apiVersion}/me/messages?access_token=${accessToken}`;
 
     try {
-      // 1. Prepare the upload form
-      const form = new FormData();
-      form.append("message", JSON.stringify({
-        attachment: {
-          type: mediaType, 
-          payload: { is_reusable: true }
-        }
-      }));
+        let attachmentPayload;
 
-      // 'source' is the path to the file in the cache folder
-      form.append("filedata", fs.createReadStream(source));
-
-      // 2. Upload to Facebook
-      const uploadRes = await axios.post(
-        `https://graph.facebook.com/v21.0/me/message_attachments?access_token=${global.PAGE_ACCESS_TOKEN}`,
-        form,
-        { headers: form.getHeaders() }
-      );
-
-      const attachmentId = uploadRes.data.attachment_id;
-
-      // 3. Send the message linking to that attachment
-      await axios.post(
-        `https://graph.facebook.com/v21.0/me/messages?access_token=${global.PAGE_ACCESS_TOKEN}`,
-        {
-          recipient: { id: recipientID },
-          message: {
-            attachment: {
-              type: mediaType,
-              payload: { attachment_id: attachmentId }
+        if (typeof source === "string" && source.startsWith("http")) {
+            // Send URL directly (only allowed for image/audio/video)
+            if (["image", "audio", "video"].includes(type)) {
+                attachmentPayload = {
+                    type: type,
+                    payload: { url: source, is_reusable: true }
+                };
+            } else {
+                throw new Error("URL attachments only supported for image/audio/video types");
             }
-          }
+        } else {
+            // Upload local file
+            const fileStats = fs.statSync(source);
+            if (!fileStats.isFile()) throw new Error("Attachment source is not a valid file");
+
+            const form = new FormData();
+            form.append("recipient", JSON.stringify({ id: threadID }));
+            form.append("message", JSON.stringify({
+                attachment: {
+                    type: type,
+                    payload: {}
+                }
+            }));
+            form.append("filedata", fs.createReadStream(source), {
+                filename: path.basename(source),
+                contentType: "application/octet-stream"
+            });
+
+            const response = await axios.post(url, form, {
+                headers: form.getHeaders(),
+                maxBodyLength: Infinity,
+                maxContentLength: Infinity
+            });
+            return response.data;
         }
-      );
-      
-      return true;
-    } catch (err) {
-      console.error("SendAttachment Failed:", err.response ? err.response.data : err.message);
-      return false;
+
+        // Send message with URL payload
+        const response = await axios.post(url, {
+            recipient: { id: threadID },
+            message: {
+                attachment: attachmentPayload
+            }
+        }, {
+            headers: { "Content-Type": "application/json" }
+        });
+
+        return response.data;
+
+    } catch (error) {
+        console.error("Error in sendAttachment:", error.message || error);
+        throw error;
     }
-  };
 };
