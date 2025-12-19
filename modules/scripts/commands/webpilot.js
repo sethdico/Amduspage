@@ -4,7 +4,7 @@ module.exports.config = {
     name: "webpilot",
     author: "Sethdico (Ported)",
     version: "1.0",
-    category: "Utility",
+    category: "AI", // Changed from Utility to AI
     description: "Web Search AI",
     adminOnly: false,
     usePrefix: false,
