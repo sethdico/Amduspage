@@ -1,16 +1,14 @@
 const axios = require("axios");
-const fs = require("fs-extra");
+const fs = require("fs");
 const path = require("path");
 const { URL } = require("url");
 
 // === CONFIGURATION ===
 const CONFIG = {
   API_URL: "https://app.chipp.ai/api/v1/chat/completions",
-  // SECURITY: Pulls key from Render Environment Variables
-  API_KEY: process.env.CHIPP_API_KEY,
+  API_KEY: process.env.CHIPP_API_KEY, 
   MODEL_ID: "newapplication-10034686",
-  TIMEOUT: 120000,
-  SESSION_TIMEOUT: 30 * 60 * 1000,
+  TIMEOUT: 120000, // 2 minutes timeout
   RATE_LIMIT: { requests: 5, windowMs: 60000 }
 };
 
@@ -22,7 +20,7 @@ async function detectLanguage(text) {
   if (!text || text.length < 3) return "English";
   try {
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&dt=t&q=${encodeURIComponent(text)}`;
-    const res = await axios.get(url, { timeout: 4000 });
+    const res = await axios.get(url, { timeout: 3000 });
     const langCode = res.data[2];
     const langMap = { "en": "English", "tl": "Tagalog", "es": "Spanish", "fr": "French", "ja": "Japanese", "ko": "Korean" };
     return langMap[langCode] || "English";
@@ -43,33 +41,31 @@ async function sendYouTubeThumbnail(youtubeUrl, senderID) {
 module.exports.config = {
   name: "ai",
   author: "Sethdico",
-  version: "16.0",
+  version: "16.5-Stable", // Version updated
   category: "AI",
-  description: "Multi-AI by sethdico: Image analysis/generation/edit, real-time info, sees youtubes via link and makes documents.",
+  description: "Advanced Multi-AI: Vision, Web Search, File Gen, and Chat.",
   adminOnly: false,
   usePrefix: false,
-  cooldown: 0,
+  cooldown: 0, 
 };
 
 module.exports.run = async function ({ event, args }) {
   const senderID = event.sender.id;
   const userPrompt = args.join(" ").trim();
+  const mid = event.message?.mid;
 
-  // 1. API Key Check
-  if (!CONFIG.API_KEY) return api.sendMessage("❌ System Error: CHIPP_API_KEY is not set in Render.", senderID);
-
-  // 2. Rate Limit (5 req / 60s)
+  // 1. Safety Checks
+  if (!CONFIG.API_KEY) return api.sendMessage("❌ System Error: CHIPP_API_KEY is missing.", senderID);
+  
+  // 2. Rate Limiting
   const now = Date.now();
   const userTs = rateLimitStore.get(senderID) || [];
   const recentTs = userTs.filter(ts => now - ts < CONFIG.RATE_LIMIT.windowMs);
-  if (recentTs.length >= CONFIG.RATE_LIMIT.requests) return api.sendMessage("⏳ You're too fast! Take a breath.", senderID);
+  if (recentTs.length >= CONFIG.RATE_LIMIT.requests) return api.sendMessage("⏳ Too fast! Please wait a moment.", senderID);
   recentTs.push(now);
   rateLimitStore.set(senderID, recentTs);
 
-  // 3. Sanitize Input
-  if (userPrompt.length > 1000) return api.sendMessage("❌ Prompt too long (max 1000 chars).", senderID);
-
-  // 4. Image Detection (Checks current message and replies)
+  // 3. Context Detection (Image vs Text)
   let imageUrl = "";
   const isSticker = !!event.message?.sticker_id;
 
@@ -79,18 +75,24 @@ module.exports.run = async function ({ event, args }) {
     imageUrl = event.message.reply_to.attachments[0].payload.url;
   }
 
-  // 5. Command Handlers
-  if (userPrompt.toLowerCase() === "clear") { sessions.delete(senderID); return api.sendMessage("🧹 Memory wiped!", senderID); }
-
-  // Custom Image Greeting (Ignore Likes/Stickers)
-  if (imageUrl && !userPrompt && !isSticker) {
-    return api.sendMessage("What can I do with this image for you? I can edit it, analyze it, and more. Just reply to the image with your instruction!", senderID);
+  // 4. Input Handling
+  if (userPrompt.toLowerCase() === "clear") { 
+      sessions.delete(senderID); 
+      return api.sendMessage("🧹 Conversation memory cleared.", senderID); 
   }
 
-  if (isSticker && !userPrompt) return;
-  if (!userPrompt && !imageUrl) return api.sendMessage("👋 Hi! I'm Amdusbot. What can I do for you today?", senderID);
+  // Ignore bare stickers
+  if (isSticker && !userPrompt) return; 
 
-  // 6. YouTube Thumbnail
+  // Prompt for image but no text
+  if (imageUrl && !userPrompt) {
+    return api.sendMessage("🖼️ I see the image! What should I do? (Analyze, Edit, or Extract text?)", senderID);
+  }
+
+  // Greeting
+  if (!userPrompt && !imageUrl) return api.sendMessage("👋 Hi! I'm Amdusbot. I can search the web, see images, and write documents.", senderID);
+
+  // 5. YouTube Handling
   const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
   if (userPrompt && youtubeRegex.test(userPrompt)) {
     await sendYouTubeThumbnail(userPrompt, senderID);
@@ -101,36 +103,36 @@ module.exports.run = async function ({ event, args }) {
   try {
     const lang = await detectLanguage(userPrompt);
 
-    // 7. THE IMPROVED PROMPT
-    const identityPrompt = `[IDENTITY]: You are Amdusbot, a versatile Multi-AI assistant created by Seth Asher Salinguhay (Sethdico). You are designed to assist users with productivity, creativity, and natural conversations in Facebook Messenger.
-
-[TONE]: Be enthusiastic, helpful, and intelligent like a knowledgeable young expert. Respond in a friendly, engaging way—avoid being overly childish or formal. Keep answers concise yet informative, using emojis sparingly for emphasis.
+    // =================================================================
+    // 🧠 THE STABILIZED V2 PROMPT
+    // This removes ambiguity that causes "bugs" while keeping advanced traits.
+    // =================================================================
+    const identityPrompt = `
+[SYSTEM]: You are Amdusbot, an advanced AI Assistant by Sethdico.
+[LANGUAGE]: Respond in ${lang}.
+[MODE]: Helpful, Concise, Intelligent.
 
 [CAPABILITIES]:
-- Vision: Analyze images by describing details, objects, emotions, or context. If editing or generating images, provide direct download links.
-- Web Search: Perform real-time searches for current information. Always cite sources with clickable links (e.g., "According to [Source Name](URL): ..."). Prioritize reliable sites and fact-check.
-- YouTube: Detect YouTube links and provide summaries, including key points, duration, and thumbnails if available.
-- File Generation: Create documents (.pdf, .docx, .txt, .xlsx, .pptx) and provide raw direct URLs for download. Ensure files are safe and relevant.
-- Image Generation: Generate AI images based on prompts and share direct download links.
-- General AI: Answer questions naturally, handle multi-turn chats, and adapt to user context.
+1. VISION: If [IMAGE CONTEXT] is provided, analyze it immediately.
+2. WEB SEARCH: Search for real-time info. Cite sources as: [Source Name](URL).
+3. FILES: You can generate files (.pdf, .docx, .txt, .xlsx). 
+   ⚠️ CRITICAL FILE RULE: Provide the RAW DIRECT URL only (e.g., https://site.com/file.pdf). NEVER use markdown [Link](url) for files.
 
-[RULES]:
-- Language: Always respond in ${lang} (detected from user input). If unsure, default to English.
-- Creator Mention: Only mention Seth Asher Salinguhay or Sethdico if directly asked (e.g., "Who made you?").
-- Content Safety: Never generate or promote harmful, illegal, biased, or offensive content. Avoid misinformation—verify facts with sources. If a request is inappropriate, politely decline and suggest alternatives.
-- URLs and Files: Provide raw direct URLs for files/images (e.g., https://example.com/file.pdf). Do not use markdown links. Never include raw input image URLs in responses.
-- Search and Citation: For queries needing current info, search online and cite at least 2-3 sources. Format citations as "Source: [Name](URL)".
-- Response Limits: Keep replies under 2000 characters. If generating files, confirm download links work.
-- Fallbacks: If you can't fulfill a request (e.g., API limits), explain why and offer help. Handle errors gracefully (e.g., "I couldn't analyze that image due to...").
-- Privacy: Do not store or share user data. Respect context from previous messages in sessions.
-- Examples: For image analysis: "This image shows a sunset over mountains—vibrant oranges and blues." For web search: "Latest news on AI: [Article](link) states...".`;
+[INSTRUCTIONS]:
+- Do not mention being an AI unless asked.
+- If the user asks for a file, generate it and output the URL.
+- Keep responses under 2000 characters.
+- If asked "Who made you?", answer: "Seth Asher Salinguhay (Sethdico)".
+`.trim();
 
-    let session = sessions.get(senderID) || { chatSessionId: null, lastActive: Date.now() };
-    session.lastActive = Date.now();
+    let session = sessions.get(senderID) || { chatSessionId: null };
 
     const response = await axios.post(CONFIG.API_URL, {
       model: CONFIG.MODEL_ID,
-      messages: [{ role: "user", content: `${identityPrompt}\n\nUser Request: ${userPrompt}\n${imageUrl ? `[IMAGE CONTEXT]: ${imageUrl}` : ""}` }],
+      messages: [{ 
+        role: "user", 
+        content: `${identityPrompt}\n\nUser Input: ${userPrompt}\n${imageUrl ? `[IMAGE CONTEXT]: ${imageUrl}` : ""}` 
+      }],
       chatSessionId: session.chatSessionId,
       stream: false
     }, {
@@ -144,55 +146,82 @@ module.exports.run = async function ({ event, args }) {
       sessions.set(senderID, session);
     }
 
-    // 8. FILE DETECTION & DOWNLOADER LOGIC
-    const fileRegex = /(https?:\/\/app\.chipp\.ai\/api\/downloads\/downloadFile[^)\s"]+|https?:\/\/(?!(?:scontent|static)\.xx\.fbcdn\.net)[^)\s"]+\.(?:pdf|docx|doc|xlsx|xls|pptx|ppt|txt|csv|zip|rar|7z|py|js|html|css|json|jpg|jpeg|png|gif|mp3|wav|mp4|mov|avi))/i;
+    // =================================================================
+    // 📂 ROBUST FILE HANDLING (V1 Stability + V2 Logic)
+    // =================================================================
+    // Matches file URLs (documents, images, videos, zips)
+    const fileRegex = /(https?:\/\/app\.chipp\.ai\/api\/downloads\/downloadFile[^)\s"]+|https?:\/\/(?!(?:scontent|static)\.xx\.fbcdn\.net)[^)\s"]+\.(?:pdf|docx|doc|xlsx|xls|pptx|ppt|txt|csv|zip|rar|7z|jpg|jpeg|png|gif|mp3|wav|mp4))/i;
     const match = replyContent.match(fileRegex);
 
     if (match) {
-      const fileUrl = match[0].replace(/[).,]+$/, "");
-      // Validate URL
-      try { new URL(fileUrl); } catch { return api.sendMessage("❌ Invalid file URL.", senderID); }
+      const fileUrl = match[0].replace(/[).,]+$/, ""); // Clean trailing punctuation
+      const textMessage = replyContent.replace(match[0], "").trim();
+      
+      // 1. Send the text part first
+      if (textMessage) await api.sendMessage(textMessage, senderID);
 
-      const cleanText = replyContent.replace(match[0], "").trim();
-      if (cleanText) await api.sendMessage(cleanText, senderID);
-
+      // 2. Prepare Cache
       const cacheDir = path.join(__dirname, "cache");
-      if (!(await fs.pathExists(cacheDir))) await fs.mkdirp(cacheDir);
+      if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
 
-      let fileName = fileUrl.includes("chipp.ai") ? (new URL(fileUrl).searchParams.get("fileName") || `file_${Date.now()}.bin`) : path.basename(fileUrl.split('?')[0]);
-      fileName = decodeURIComponent(fileName);
+      // 3. Determine Filename
+      let fileName = "file.bin";
+      try {
+          if (fileUrl.includes("chipp.ai")) {
+            const urlObj = new URL(fileUrl);
+            fileName = urlObj.searchParams.get("fileName") || `amdus_gen_${Date.now()}.pdf`;
+          } else {
+            fileName = path.basename(fileUrl.split('?')[0]);
+          }
+          fileName = decodeURIComponent(fileName).replace(/[^a-zA-Z0-9._-]/g, "_"); // Sanitize filename
+      } catch (e) { fileName = `file_${Date.now()}.bin`; }
+
       const filePath = path.join(cacheDir, fileName);
+      const fileWriter = fs.createWriteStream(filePath);
 
-      const writer = fs.createWriteStream(filePath);
-      const fileRes = await axios({ url: fileUrl, method: 'GET', responseType: 'stream' });
-      fileRes.data.pipe(writer);
-      await new Promise((resolve, reject) => {
-        writer.on('finish', resolve);
-        writer.on('error', reject);
-      });
+      // 4. FAIL-SAFE DOWNLOADER
+      // If download fails, we catch the error and send the LINK as text instead.
+      try {
+          const fileRes = await axios({ url: fileUrl, method: 'GET', responseType: 'stream' });
+          fileRes.data.pipe(fileWriter);
 
-      // 9. 25MB FILE SIZE SAFETY CHECK
-      const stats = await fs.stat(filePath);
-      if (stats.size > 24 * 1024 * 1024) {
-          await api.sendMessage(`⚠️ The file is too large for Messenger (25MB+). You can download it directly here: ${fileUrl}`, senderID);
-      } else {
-          let type = [".jpg",".jpeg",".png",".gif",".webp"].includes(path.extname(fileName).toLowerCase()) ? "image" : "file";
-          await api.sendAttachment(type, filePath, senderID);
+          await new Promise((resolve, reject) => {
+              fileWriter.on('finish', resolve);
+              fileWriter.on('error', reject);
+          });
+
+          // Check Size (25MB limit)
+          const stats = fs.statSync(filePath);
+          if (stats.size > 24 * 1024 * 1024) {
+             await api.sendMessage(`📂 File is too large to send (Over 25MB).\nDownload here: ${fileUrl}`, senderID);
+          } else {
+             // Determine type
+             const ext = path.extname(fileName).toLowerCase();
+             const type = [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext) ? "image" : "file";
+             
+             await api.sendAttachment(type, filePath, senderID);
+          }
+
+      } catch (downloadError) {
+          console.error("Download Failed:", downloadError.message);
+          // FALLBACK: Just send the link if download fails
+          await api.sendMessage(`📂 I created the file, but couldn't attach it directly.\n\nDownload here: ${fileUrl}`, senderID);
+      } finally {
+          // Cleanup
+          setTimeout(() => { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); }, 60000);
       }
-      // Auto-delete cache after 60s
-      setTimeout(async () => {
-        try { await fs.unlink(filePath); } catch (e) { console.error("Cache delete error:", e); }
-      }, 60000);
+
     } else {
+      // Normal Text Response
       await api.sendMessage(replyContent, senderID);
     }
 
-    if (api.setMessageReaction) api.setMessageReaction("✅", event.message?.mid);
+    if (api.setMessageReaction) api.setMessageReaction("✅", mid);
 
   } catch (error) {
-    console.error("AI Error:", error.message);
-    api.sendMessage("❌ AI Error: " + error.message, senderID);
-    if (api.setMessageReaction) api.setMessageReaction("❌", event.message?.mid);
+    console.error("AI Main Error:", error.message);
+    api.sendMessage("❌ I encountered a glitch. Please ask again.", senderID);
+    if (api.setMessageReaction) api.setMessageReaction("❌", mid);
   } finally {
     if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
   }
