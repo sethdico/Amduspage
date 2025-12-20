@@ -22,10 +22,10 @@ module.exports = function (event) {
         form.append("message", JSON.stringify({ attachment: { type: mediaType, payload: { is_reusable: true } } }));
         form.append("filedata", fs.createReadStream(source));
 
-        const uploadRes = await axios.post(`https://graph.facebook.com/v21.0/me/messages?access_token=${accessToken}`, form, { headers: form.getHeaders() });
+        await axios.post(`https://graph.facebook.com/v21.0/me/messages?access_token=${accessToken}`, form, { headers: form.getHeaders() });
       }
     } catch (err) {
-      console.error("Attachment Error:", err.response ? err.response.data : err.message);
+      console.error("Attachment Sender Failed:", err.response ? err.response.data : err.message);
     }
   };
 };
