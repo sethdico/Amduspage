@@ -6,15 +6,13 @@ module.exports = async function (event) {
   const modulesPath = path.join(__dirname, "../modules/scripts/commands");
   const commandFiles = fs.readdirSync(modulesPath).filter(file => file.endsWith(".js"));
   
-  // Handle Get Started
   if (event.postback?.payload === "GET_STARTED_PAYLOAD") {
       return api.sendMessage("👋 **Welcome to Amdusbot!**\nTalk to me naturally or type `help`!", event.sender.id);
   }
 
   if (event.message?.is_echo) return;
-  if (config.markAsSeen) api.markAsSeen(true, event.sender.id).catch(()=>{});
 
-  // --- 🛠️ THE FIX: Correctly read text or payload ---
+  // --- 🛠️ THE FIX: Read typed text OR button payload ---
   const messageText = (event.message?.text || event.postback?.payload || "").trim();
   if (!messageText && !event.message?.attachments) return;
 
@@ -23,16 +21,12 @@ module.exports = async function (event) {
   let commandFound = false;
 
   // Aliases
-  if (cmdName === "imge" || cmdName === "generate") cmdName = "deepimg";
-  if (cmdName === "search") cmdName = "webpilot";
+  if (cmdName === "draw" || cmdName === "generate") cmdName = "deepimg";
 
   for (const file of commandFiles) {
     const command = require(path.join(modulesPath, file));
     let checkName = cmdName;
-    
-    // Prefix logic
-    if (command.config.usePrefix) {
-        if (!checkName.startsWith(config.PREFIX)) continue;
+    if (command.config.usePrefix && checkName.startsWith(config.PREFIX)) {
         checkName = checkName.slice(config.PREFIX.length);
     }
 
