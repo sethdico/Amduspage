@@ -7,12 +7,12 @@ module.exports = async function (event) {
   const commandFiles = fs.readdirSync(modulesPath).filter(file => file.endsWith(".js"));
   
   if (event.postback?.payload === "GET_STARTED_PAYLOAD") {
-      return api.sendMessage("👋 **Welcome to Amdusbot!**\nTalk to me naturally or type `help`!", event.sender.id);
+      return api.sendMessage("👋 **Welcome to Amdusbot!**\nI'm a Multi-AI assistant. Talk to me naturally or type `help`!", event.sender.id);
   }
 
   if (event.message?.is_echo) return;
 
-  // --- 🛠️ THE FIX: Read typed text OR button payload ---
+  // Handles typed text OR button clicks
   const messageText = (event.message?.text || event.postback?.payload || "").trim();
   if (!messageText && !event.message?.attachments) return;
 
@@ -22,6 +22,7 @@ module.exports = async function (event) {
 
   // Aliases
   if (cmdName === "draw" || cmdName === "generate") cmdName = "deepimg";
+  if (cmdName === "search") cmdName = "webpilot";
 
   for (const file of commandFiles) {
     const command = require(path.join(modulesPath, file));
@@ -41,11 +42,13 @@ module.exports = async function (event) {
     }
   }
 
-  // Auto-AI Fallback
-  if (!commandFound && !messageText.startsWith(config.PREFIX) && messageText.length > 0) {
+  // Auto-AI Fallback (Talks to AI if no command matches)
+  if (!commandFound && !messageText.startsWith(config.PREFIX) && (messageText || event.message?.attachments)) {
       try {
           const aiCommand = require(path.join(modulesPath, "ai.js"));
           await aiCommand.run({ event, args: messageText.split(" ") });
-      } catch (e) {}
+      } catch (e) {
+          console.error("Auto-AI Error:", e.message);
+      }
   }
 };
