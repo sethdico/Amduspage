@@ -46,7 +46,7 @@ module.exports.config = {
   author: "Sethdico",
   version: "16.0",
   category: "AI",
-  description: "Multi-AI by sethdico: Image analysis/generation, real-time info, sees youtubes via link and makes documents.",
+  description: "Multi-AI by sethdico: Image analysis/generation/edit, real-time info, sees youtubes via link and makes documents.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 0, 
