@@ -5,21 +5,12 @@ const fs = require("fs");
 let messagesCache = {};
 const messagesFilePath = "./page/data.json";
 
-// Load cache if exists and clearData is false
 if (!config.clearData && fs.existsSync(messagesFilePath)) {
-  try {
-    messagesCache = JSON.parse(fs.readFileSync(messagesFilePath, "utf8"));
-  } catch (e) {
-    console.error("Failed to load messages cache:", e);
-  }
+  try { messagesCache = JSON.parse(fs.readFileSync(messagesFilePath, "utf8")); } catch (e) {}
 }
 
 function writeToFile() {
-  try {
-    fs.writeFileSync(messagesFilePath, JSON.stringify(messagesCache, null, 2), "utf8");
-  } catch (e) {
-    console.error("Failed to write messages cache:", e);
-  }
+  try { fs.writeFileSync(messagesFilePath, JSON.stringify(messagesCache, null, 2), "utf8"); } catch (e) {}
 }
 
 module.exports.listen = function (event) {
@@ -27,11 +18,11 @@ module.exports.listen = function (event) {
     if (event.object === "page") {
       event.entry.forEach((entry) => {
         entry.messaging.forEach(async (ev) => {
-          // Determine event type
           ev.type = await utils.getEventType(ev);
-          global.PAGE_ACCESS_TOKEN = config.PAGE_ACCESS_TOKEN;
+          
+          // SECURITY: Prioritize Render Environment Variables
+          global.PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN || config.PAGE_ACCESS_TOKEN;
 
-          // Cache message data
           if (ev.message && ev.message.mid) {
             messagesCache[ev.message.mid] = {
               text: ev.message.text,
@@ -40,7 +31,6 @@ module.exports.listen = function (event) {
             writeToFile();
           }
 
-          // Handle reply context
           if (ev.type === "message_reply") {
             const repliedMid = ev.message.reply_to?.mid;
             if (repliedMid && messagesCache[repliedMid]) {
@@ -49,16 +39,12 @@ module.exports.listen = function (event) {
             }
           }
 
-          // Skip self messages if configured
           if (config.selfListen && ev?.message?.is_echo) return;
 
-          // Log and forward to main handler
           utils.log(ev);
           require("./page/main")(ev);
         });
       });
     }
-  } catch (error) {
-    console.error("Webhook error:", error);
-  }
+  } catch (error) { console.error("Webhook error:", error); }
 };
