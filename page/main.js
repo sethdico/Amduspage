@@ -9,7 +9,7 @@ module.exports = async function (event) {
     "sendTypingIndicator",
     "setMessageReaction",
     "sendAttachment",
-    "sendButton" // <--- This was missing!
+    "sendButton"
   ];
 
   for (const scriptName of scripts) {
