@@ -16,7 +16,9 @@ function getEventType(event) {
 function log(event) {
   let sender = config.ADMINS.includes(event.sender?.id) ? "ADMIN" : "USER";
   if (event.message?.is_echo) sender = "BOT";
-  console.log(`${theme.gradient.multiline(sender)}: Event Received`);
+  // Sanitize: Mask user ID
+  const maskedId = event.sender?.id ? event.sender.id.slice(-4) : "unknown";
+  console.log(`${theme.gradient.multiline(sender)} (${maskedId}): Event Received`);
 }
 
 module.exports = { log, getEventType };
