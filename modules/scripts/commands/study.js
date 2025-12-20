@@ -2,6 +2,7 @@ const axios = require("axios");
 
 const studyVault = new Map();
 
+// CONFIG FOR THE SPECIALIZED STUDY API
 const STUDY_CONFIG = {
   API_URL: "https://app.chipp.ai/api/v1/chat/completions",
   API_KEY: process.env.STUDY_API_KEY, 
@@ -12,7 +13,7 @@ const STUDY_CONFIG = {
 module.exports.config = {
   name: "study",
   author: "Sethdico",
-  version: "6.0", 
+  version: "7.0", 
   category: "Education",
   description: "Academic Engine for Quizzes and Summaries.",
   adminOnly: false,
@@ -22,27 +23,31 @@ module.exports.config = {
 
 module.exports.run = async function ({ event, args }) {
   const senderID = event.sender.id;
-  const trigger = args[0]?.toUpperCase();
+  const firstWord = args[0]?.toLowerCase();
   const materialInput = args.join(" ").trim();
 
-  // --- MODE A: BUTTON CLICKS ---
-  if (trigger && trigger.startsWith("MODE_")) {
+  // --- LOGIC A: HANDLING THE ACTION (Button Clicks) ---
+  if (["summarize", "quiz", "simplify"].includes(firstWord)) {
     const material = studyVault.get(senderID);
-    if (!material) return api.sendMessage("⚠️ Session expired. Please re-paste your notes!", senderID);
+    
+    if (!material) {
+      return api.sendMessage("⚠️ **Session Expired.** Please type `study <topic>` again to refresh my memory!", senderID);
+    }
 
-    let taskType = "";
-    if (trigger === "MODE_SUM") taskType = "SUMMARIZE";
-    if (trigger === "MODE_QUIZ") taskType = "QUIZ";
-    if (trigger === "MODE_ELI5") taskType = "SIMPLIFY (ELI5)";
+    let taskType = firstWord.toUpperCase();
+    if (taskType === "SIMPLIFY") taskType = "SIMPLIFY (ELI5)";
 
     api.sendTypingIndicator(true, senderID);
 
     try {
-        const systemPrompt = `[ROLE]: Amdusbot Academic Engine. 
-[DIRECTIVE]: Process the MATERIAL and output the TASK with NO conversational filler. No "Hi", no "Sure". Start IMMEDIATELY with the result.
-[MODES]: 1. SUMMARIZE (Bullet points). 2. QUIZ (3 MCQs A,B,C,D). 3. SIMPLIFY (Analogy).
-MATERIAL: ${material}
-TASK: ${taskType}`;
+        const systemPrompt = `[ROLE]: Act as the Amdusbot Academic Engine. 
+[PRIMARY DIRECTIVE]: Process the provided MATERIAL and output the requested TASK with ZERO conversational filler. Do not say "Hi", "Sure", or "Here is". Start IMMEDIATELY with the result.
+[EXECUTION MODES]:
+1. SUMMARIZE: Bullet points with **Bold** terms.
+2. QUIZ: 3 Multiple Choice Questions (A, B, C, D). Questions ONLY.
+3. SIMPLIFY: Creative analogy for a 5-year-old.
+[MATERIAL]: ${material}
+[TASK]: ${taskType}`;
 
         const response = await axios.post(STUDY_CONFIG.API_URL, {
             model: STUDY_CONFIG.MODEL_ID,
@@ -54,29 +59,32 @@ TASK: ${taskType}`;
         });
 
         const result = response.data?.choices?.[0]?.message?.content;
-        if (result) await api.sendMessage(result, senderID);
+        if (result) {
+            await api.sendMessage(result, senderID);
+        }
 
     } catch (e) {
-        api.sendMessage("❌ Engine Error. Check your STUDY_API_KEY in Render.", senderID);
+        api.sendMessage("❌ Academic Engine Error. Check your Render Environment Variables.", senderID);
     } finally {
         api.sendTypingIndicator(false, senderID);
     }
     return;
   }
 
-  // --- MODE B: DATA INTAKE (Typed 'study ...') ---
-  if (materialInput && materialInput.toLowerCase() !== "study") {
+  // --- LOGIC B: DATA INTAKE (Typed 'study photosynthesis') ---
+  if (materialInput && firstWord !== "summarize" && firstWord !== "quiz" && firstWord !== "simplify") {
     studyVault.set(senderID, materialInput);
     
     const buttons = [
-      { type: "postback", title: "📝 Summarize", payload: "study MODE_SUM" },
-      { type: "postback", title: "❓ Quiz Me", payload: "study MODE_QUIZ" },
-      { type: "postback", title: "👶 Simplify", payload: "study MODE_ELI5" }
+      { type: "postback", title: "📝 Summarize", payload: "study summarize" },
+      { type: "postback", title: "❓ Quiz Me", payload: "study quiz" },
+      { type: "postback", title: "👶 Simplify", payload: "study simplify" }
     ];
 
-    return api.sendButton("🎓 **Academic Engine Active**\nI've memorized your material. Choose a mode:", buttons, senderID);
+    const display = materialInput.length > 20 ? materialInput.substring(0, 20) + "..." : materialInput;
+    return api.sendButton(`🎓 **Vault Locked: ${display}**\n\nI've memorized your notes. Select an option (I will respond immediately with no chatting!):`, buttons, senderID);
   }
 
-  // --- MODE C: HELP ---
-  api.sendMessage("🎓 Usage: `study <topic or notes>`", senderID);
+  // --- LOGIC C: HELP ---
+  api.sendMessage("🎓 **Amdusbot Study Toolkit**\nUsage: `study <topic or notes>`", senderID);
 };
