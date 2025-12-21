@@ -9,7 +9,7 @@ const CONFIG = {
   API_KEY: process.env.CHIPP_API_KEY, 
   MODEL_ID: "newapplication-10034686",
   TIMEOUT: 120000,
-  RATE_LIMIT: { requests: 10, windowMs: 60000 } // Bumped slightly for usability
+  RATE_LIMIT: { requests: 10, windowMs: 60000 }
 };
 
 // Memory Storage
@@ -28,7 +28,6 @@ setInterval(() => {
     // Clear rate limits too
     rateLimitStore.clear();
 }, 60 * 60 * 1000);
-
 
 // === HELPERS ===
 async function detectLanguage(text) {
@@ -56,9 +55,9 @@ async function sendYouTubeThumbnail(youtubeUrl, senderID) {
 module.exports.config = {
   name: "ai",
   author: "Sethdico",
-  version: "19.0-Stable", 
+  version: "20.5-HybridBrain", 
   category: "AI",
-  description: "Advanced AI by Seth Asher: ToT Reasoning, CoVe Verification, Vision, Files & Interactive Buttons.",
+  description: "Advanced AI: ToT/CoVe for Logic, Creative Mode for Art/Editing.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 0, 
@@ -114,35 +113,55 @@ module.exports.run = async function ({ event, args }) {
     const lang = await detectLanguage(userPrompt);
 
     // =================================================================
-    // 🧠 SYSTEM PROMPT (Optimized)
+    // 🧠 DYNAMIC PROMPT SWITCHING
     // =================================================================
-    const identityPrompt = `
-[SYSTEM]: You are Amdusbot, an AI Assistant by Sethdico.
+    
+    // Detect "Creative Intent"
+    const isCreation = /\b(draw|generate|create|make)\b.*\b(image|art|picture|photo|sketch)\b/i.test(userPrompt) || /\b(draw|paint)\b/i.test(userPrompt);
+    const isEditing = imageUrl && /\b(edit|change|modify|remove|add)\b/i.test(userPrompt);
+    const isCreativeMode = isCreation || isEditing;
+
+    let systemPrompt = "";
+
+    if (isCreativeMode) {
+        // --- 🎨 CREATIVE MODE ---
+        // Forces AI to ignore logic rules and focus on art generation instructions
+        systemPrompt = `
+[SYSTEM]: You are Amdusbot, in CREATIVE MODE.
+[LANGUAGE]: Respond in ${lang}.
+[GOAL]: The user wants to generate or edit an image.
+[INSTRUCTIONS]: 
+- Ignore "Tree of Thoughts" logic.
+- Be highly descriptive, imaginative, and artistic.
+- If editing, describe the visual changes vividly.
+`.trim();
+
+    } else {
+        // --- 🧠 ANALYTICAL MODE ---
+        // Forces AI to use ToT and CoVe for logic/questions
+        systemPrompt = `
+[SYSTEM]: You are Amdusbot, in ANALYTICAL MODE.
 [LANGUAGE]: Respond in ${lang}.
 
 [CORE PROTOCOLS]:
 1. INTELLECTUAL HONESTY: Never guess. Say "I am not sure" if unknown.
-2. THINKING: For complex questions, list 3 approaches before answering (Tree of Thoughts).
-3. VERIFICATION: Verify technical facts before answering (Chain of Verification).
+2. TREE OF THOUGHTS (ToT): For complex questions, list 3 approaches before answering.
+3. CHAIN OF VERIFICATION (CoVe): Verify technical facts before answering.
 
 [CAPABILITIES]:
-1. VISION: Analyze [IMAGE CONTEXT] if present.
-2. WEB SEARCH: Cite sources [Source](URL).
-3. FILES: Provide RAW DIRECT URLs only.
-
-[INSTRUCTIONS]:
-- Keep responses concise (under 2000 chars).
-- If asked "Who made you?", answer: "Seth Asher Salinguhay (Sethdico)".
+1. VISION: Analyze [IMAGE CONTEXT] detailedly.
+2. FILES: Provide RAW DIRECT URLs only.
 `.trim();
+    }
 
     let session = sessions.get(senderID) || { chatSessionId: null, lastActivity: Date.now() };
-    session.lastActivity = Date.now(); // Update activity time
+    session.lastActivity = Date.now(); 
 
     const response = await axios.post(CONFIG.API_URL, {
       model: CONFIG.MODEL_ID,
       messages: [{ 
         role: "user", 
-        content: `${identityPrompt}\n\nUser Input: ${userPrompt}\n${imageUrl ? `[IMAGE CONTEXT]: ${imageUrl}` : ""}` 
+        content: `${systemPrompt}\n\nUser Input: ${userPrompt}\n${imageUrl ? `[IMAGE CONTEXT]: ${imageUrl}` : ""}` 
       }],
       chatSessionId: session.chatSessionId,
       stream: false
@@ -158,7 +177,7 @@ module.exports.run = async function ({ event, args }) {
     }
 
     // =================================================================
-    // 📂 ROBUST FILE HANDLING (Full Code Restored)
+    // 📂 FILE HANDLING
     // =================================================================
     const fileRegex = /(https?:\/\/app\.chipp\.ai\/api\/downloads\/downloadFile[^)\s"]+|https?:\/\/(?!(?:scontent|static)\.xx\.fbcdn\.net)[^)\s"]+\.(?:pdf|docx|doc|xlsx|xls|pptx|ppt|txt|csv|zip|rar|7z|jpg|jpeg|png|gif|mp3|wav|mp4))/i;
     const match = replyContent.match(fileRegex);
@@ -216,15 +235,13 @@ module.exports.run = async function ({ event, args }) {
       // 🔄 SAFE RESPONSE + BUTTONS
       // =================================================================
       
-      // 1. Send the long AI text safely FIRST
+      // 1. Send the text FIRST (Prevents button crash if text is long)
       await api.sendMessage(replyContent, senderID);
 
-      // 2. Determine Payload (Safe Length)
-      // Payloads have a 1000 char limit. If the user prompt was massive, truncate it for the button.
+      // 2. Prepare Payload (Truncated for safety)
       const safePayload = userPrompt.length > 900 ? userPrompt.slice(0, 900) : userPrompt;
 
-      // 3. Send the interaction buttons as a SEPARATE small message
-      // This prevents the "Message Too Long" crash
+      // 3. Construct Buttons based on Mode
       const buttons = [
         {
             type: "postback",
@@ -233,15 +250,19 @@ module.exports.run = async function ({ event, args }) {
         },
         {
             type: "postback",
-            title: "👶 Simplify",
-            payload: `Explain this simply: ${safePayload}`
-        },
-        {
-            type: "postback",
             title: "📜 Summarize",
             payload: `Summarize the previous answer`
         }
       ];
+
+      // Add "Simplify" button ONLY if not in Creative Mode
+      if (!isCreativeMode) {
+          buttons.splice(1, 0, {
+            type: "postback",
+            title: "👶 Simplify",
+            payload: `Explain this simply: ${safePayload}`
+          });
+      }
 
       await api.sendButton("💡 **What next?**", buttons, senderID);
     }
