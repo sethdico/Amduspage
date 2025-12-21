@@ -1,14 +1,14 @@
 module.exports.config = {
     name: "uid",
-    author: "Sethdico (Ported)",
-    version: "1.0",
+    author: "Sethdico",
+    version: "1.2",
     category: "Utility",
-    description: "Get User ID",
+    description: "Get your Page-Scoped ID",
     adminOnly: false,
-    usePrefix: false,
+    usePrefix: false, 
     cooldown: 0,
 };
 
 module.exports.run = function ({ event }) {
-    api.sendMessage(`🆔 Your ID: ${event.sender.id}`, event.sender.id);
+    api.sendMessage(`🆔 **Your Unique ID (PSID):**\n${event.sender.id}\n\n(Use this ID for admin permissions or banning)`, event.sender.id);
 };
