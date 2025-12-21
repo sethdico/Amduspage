@@ -1,7 +1,7 @@
 const axios = require("axios");
 
 module.exports.config = {
-    name: "you",
+    name: "youai",
     author: "Sethdico (Ported)",
     version: "1.0",
     category: "AI", // Changed from Utility to AI
