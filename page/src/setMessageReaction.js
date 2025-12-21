@@ -1,19 +1,26 @@
 const axios = require("axios");
 
 module.exports = function (event) {
-  return function setMessageReaction(reaction, messageId) {
-    // If no messageId provided, try to use the current event's message ID
+  return async function setMessageReaction(reaction, messageId) {
     const mid = messageId || event.message?.mid;
-    
-    if (!mid) return Promise.resolve();
+    const recipientID = event.sender?.id;
 
-    return axios.post(
-      `https://graph.facebook.com/v20.0/${mid}/reactions?access_token=${global.PAGE_ACCESS_TOKEN}`,
-      {
-        reaction: reaction,
-      }
-    ).catch((err) => {
+    if (!mid || !recipientID) return;
+
+    try {
+      await axios.post(
+        `https://graph.facebook.com/v21.0/me/messages?access_token=${global.PAGE_ACCESS_TOKEN}`,
+        {
+          recipient: { id: recipientID },
+          sender_action: "react",
+          payload: {
+            message_id: mid,
+            reaction: reaction
+          }
+        }
+      );
+    } catch (err) {
       console.error("Reaction Error:", err.response ? err.response.data : err.message);
-    });
+    }
   };
 };
