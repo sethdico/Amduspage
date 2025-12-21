@@ -8,7 +8,7 @@ const app = express();
 
 const cacheDir = path.join(__dirname, "modules/scripts/commands/cache");
 
-// --- 🧹 STARTUP CLEANER (Stable V1 Logic) ---
+// --- 🧹 STARTUP CLEANER ---
 if (!fs.existsSync(cacheDir)) {
     fs.mkdirSync(cacheDir, { recursive: true });
 } else {
@@ -19,12 +19,39 @@ if (!fs.existsSync(cacheDir)) {
     console.log("🧹 SYSTEM: Cache cleared on startup.");
 }
 
-// --- 🛡️ MIDDLEWARE (V2 Features) ---
-// 1. Increase limit for large payloads
+// --- 🚀 NEW: GLOBAL COMMAND LOADER ---
+global.client = {
+    commands: new Map(),
+    aliases: new Map()
+};
+
+const commandsPath = path.join(__dirname, "modules/scripts/commands");
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith(".js"));
+
+console.log(`📦 Loading ${commandFiles.length} commands...`);
+
+for (const file of commandFiles) {
+    try {
+        const cmd = require(path.join(commandsPath, file));
+        if (cmd.config && cmd.config.name) {
+            global.client.commands.set(cmd.config.name.toLowerCase(), cmd);
+            // Load aliases if they exist
+            if (cmd.config.aliases && Array.isArray(cmd.config.aliases)) {
+                cmd.config.aliases.forEach(alias => {
+                    global.client.aliases.set(alias.toLowerCase(), cmd.config.name.toLowerCase());
+                });
+            }
+        }
+    } catch (e) {
+        console.error(`❌ Failed to load ${file}:`, e.message);
+    }
+}
+console.log(`✅ Commands loaded successfully!`);
+
+// --- 🛡️ MIDDLEWARE ---
 app.use(parser.json({ limit: '10mb' }));
 app.use(express.static("website"));
 
-// 2. Force HTTPS (Security from V2)
 app.use((req, res, next) => {
   if (req.header('x-forwarded-proto') && req.header('x-forwarded-proto') !== 'https') {
     res.redirect(`https://${req.header('host')}${req.url}`);
@@ -41,7 +68,7 @@ app.post("/webhook", (req, res) => {
     res.sendStatus(200);
 });
 
-// --- 🚨 GLOBAL ERROR HANDLER (V2 Feature) ---
+// --- 🚨 GLOBAL ERROR HANDLER ---
 app.use((err, req, res, next) => {
   console.error("🔥 Critical Server Error:", err.stack);
   res.status(500).send("Internal Server Error");
