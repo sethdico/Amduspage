@@ -3,7 +3,7 @@ const axios = require("axios");
 module.exports.config = {
     name: "dict",
     author: "Sethdico",
-    version: "6.1-HYBRID-RANDOM", 
+    version: "7.0-Fixed",
     category: "Utility",
     description: "Merriam-Webster + Urban Dictionary (Slang) Integration with Real Randomization.",
     adminOnly: false,
@@ -11,65 +11,65 @@ module.exports.config = {
     cooldown: 5,
 };
 
-module.exports.run = async function ({ event, args }) {
-    const { api } = global.client ? global.client : { api: { sendMessage: () => {}, sendTypingIndicator: () => {}, sendAttachment: () => {} } }; // Fallback for safety if api isn't global
+module.exports.run = async function ({ event, args, api }) {
     let input = args.join(" ").trim();
     let forceSlang = false;
 
-    // 1. Check for "slang" keyword triggers FIRST
-    // We do this first so we know if the user wants a random SLANG word or standard word
     if (args[0]?.toLowerCase() === "slang" || args[0]?.toLowerCase() === "urban") {
         forceSlang = true;
         input = args.slice(1).join(" ").trim();
     }
 
-    // 2. Handle "Random" - Now fetches from APIs
+    // ✅ Fixed: Handle random with proper fallback
     if (input.toLowerCase() === "random") {
         try {
             if (forceSlang) {
-                // Fetch random slang from Urban Dictionary
-                const rndRes = await axios.get("https://api.urbandictionary.com/v0/random");
+                const rndRes = await axios.get("https://api.urbandictionary.com/v0/random", { timeout: 5000 });
                 if (rndRes.data.list && rndRes.data.list.length > 0) {
                     input = rndRes.data.list[0].word;
                 }
             } else {
-                // Fetch random standard word from Random Word API
-                const rndRes = await axios.get("https://random-word-api.herokuapp.com/word?number=1");
+                const rndRes = await axios.get("https://random-word-api.herokuapp.com/word?number=1", { timeout: 5000 });
                 if (rndRes.data && rndRes.data.length > 0) {
                     input = rndRes.data[0];
                 }
             }
         } catch (e) {
-            // Fallback to a hardcoded list ONLY if the API fails
+            console.error("Random word API failed:", e.message);
+        }
+        
+        // ✅ Fallback if API returned empty or failed
+        if (!input || input === "random") {
             const backupWords = ["serendipity", "petrichor", "sonder", "defenestration", "limerence"];
             input = backupWords[Math.floor(Math.random() * backupWords.length)];
         }
     }
 
-    if (!input) return api.sendMessage("📖 **Usage:**\n• define <word> (Standard)\n• define slang <word> (Street)\n• define random (Surprise me)\n• define slang random (Random Slang)", event.sender.id);
+    if (!input) {
+        return api.sendMessage(
+            "📖 **Usage:**\n• dict <word> (Standard)\n• dict slang <word> (Street)\n• dict random (Surprise me)\n• dict slang random (Random Slang)",
+            event.sender.id
+        );
+    }
 
     api.sendTypingIndicator(true, event.sender.id);
 
-    // If user specifically asked for slang, skip Merriam-Webster
     if (forceSlang) {
-        return searchUrbanDictionary(input, event);
+        return searchUrbanDictionary(input, event, api);
     }
 
-    // 3. Try Merriam-Webster (Standard)
     try {
         const word = input.replace(/[^a-zA-Z\s-]/g, "").toLowerCase();
-        const apiKey = "0a415fd9-1ec3-4145-9f53-d534da653b1f"; // Your Collegiate Key
+        const apiKey = process.env.DICT_API_KEY || "0a415fd9-1ec3-4145-9f53-d534da653b1f";
         const url = `https://www.dictionaryapi.com/api/v3/references/collegiate/json/${encodeURIComponent(word)}?key=${apiKey}`;
         
         const response = await axios.get(url);
         const data = response.data;
 
-        // If M-W fails or gives suggestions, FALLBACK to Urban Dictionary automatically
         if (!data || data.length === 0 || typeof data[0] === "string") {
-            return searchUrbanDictionary(input, event, true); // true = automatic fallback mode
+            return searchUrbanDictionary(input, event, api, true);
         }
 
-        // --- MERRIAM-WEBSTER PARSER ---
         const entry = data[0];
         const headword = entry.hwi?.hw?.replace(/\*/g, "•") || word;
         const pronunciation = entry.hwi?.prs?.[0]?.mw || "---";
@@ -82,11 +82,9 @@ module.exports.run = async function ({ event, args }) {
             defText = "No short definition available.";
         }
 
-        // Clean Tags like {it}, {bc}, {wi}
         let etymology = entry.et?.[0]?.[1]?.replace(/{[^{}]+}/g, "") || "Origin details unavailable.";
         let timeTravel = entry.date?.replace(/{[^{}]+}/g, "") || "Date unknown";
 
-        // Extract Metadata (Synonyms/Antonyms)
         let synonyms = "None found";
         let antonyms = "None found";
 
@@ -100,47 +98,43 @@ module.exports.run = async function ({ event, args }) {
         }
 
         const msg = `📖 **${headword.toUpperCase()}**
-━━━━━━━━━━━━━━━━
+───────────────
 🗣️ **Pronunciation:** /${pronunciation}/
 🏷️ **Type:** ${type}
 
 📝 **Definitions:**
 ${defText}
-━━━━━━━━━━━━━━━━
+───────────────
 📜 **Etymology:** ${etymology}
 ⏳ **Time Travel:** ${timeTravel}
 
 🔄 **Synonyms:** ${synonyms}
 ↔️ **Antonyms:** ${antonyms}
-━━━━━━━━━━━━━━━━`;
+───────────────`;
 
         await api.sendMessage(msg, event.sender.id);
 
-        // Audio Handler
         if (entry.hwi?.prs?.[0]?.sound?.audio) {
             const audioName = entry.hwi.prs[0].sound.audio;
             let subdir = "";
             
-            // Logic to find exact subdirectory per M-W documentation
             if (audioName.startsWith("bix")) subdir = "bix";
             else if (audioName.startsWith("gg")) subdir = "gg";
             else if (!isNaN(audioName.charAt(0)) || audioName.startsWith("_")) subdir = "number";
             else subdir = audioName.charAt(0);
 
-            const audioUrl = `https://media.merriam-webster.com/audio/prons/collegiate/v2/mp3/${subdir}/${audioName}.mp3`;
+            const audioUrl = `https://media.merriam-webster.com/audio/prons/en/us/mp3/${subdir}/${audioName}.mp3`;
             await api.sendAttachment("audio", audioUrl, event.sender.id);
         }
 
     } catch (error) {
-        // If M-W crashes completely (API Error), try Urban as last resort
-        searchUrbanDictionary(input, event, true);
+        searchUrbanDictionary(input, event, api, true);
     } finally {
         api.sendTypingIndicator(false, event.sender.id);
     }
 };
 
-// --- URBAN DICTIONARY HELPER FUNCTION ---
-async function searchUrbanDictionary(query, event, isFallback = false) {
+async function searchUrbanDictionary(query, event, api, isFallback = false) {
     try {
         const res = await axios.get(`https://api.urbandictionary.com/v0/define?term=${encodeURIComponent(query)}`);
         const list = res.data.list;
@@ -149,10 +143,8 @@ async function searchUrbanDictionary(query, event, isFallback = false) {
             return api.sendMessage(`❌ Word not found in Standard or Slang dictionaries: "${query}"`, event.sender.id);
         }
 
-        // Get most voted definition
         const entry = list[0];
         
-        // Clean brackets [word] -> word
         const cleanDefinition = entry.definition.replace(/\[|\]/g, "");
         const cleanExample = entry.example.replace(/\[|\]/g, "");
         const date = new Date(entry.written_on).toLocaleDateString();
@@ -161,13 +153,13 @@ async function searchUrbanDictionary(query, event, isFallback = false) {
         const note = isFallback ? "\n*(Standard dictionary didn't have this, so I checked Urban Dictionary)*" : "";
 
         const msg = `${title}
-━━━━━━━━━━━━━━━━
+───────────────
 📝 **Definition:**
 ${cleanDefinition}
 
 💡 **Example:**
 "${cleanExample}"
-━━━━━━━━━━━━━━━━
+───────────────
 👍 **Likes:** ${entry.thumbs_up} | 👎 **Dislikes:** ${entry.thumbs_down}
 📅 **Added:** ${date}
 ✍️ **Author:** ${entry.author}${note}`;
