@@ -34,7 +34,6 @@ const rateLimitStore = new Map();
 // --- Maintenance Task (Runs every 30 mins) ---
 setInterval(() => {
     const now = Date.now();
-    // Clean cache files
     fs.readdir(CACHE_DIR, (err, files) => {
         if (err) return;
         files.forEach(file => {
@@ -44,7 +43,6 @@ setInterval(() => {
             });
         });
     });
-    // Expire old sessions (48 hours)
     for (const id in sessions) {
         if (now - sessions[id].lastActivity > 48 * 60 * 60 * 1000) delete sessions[id];
     }
@@ -77,15 +75,15 @@ async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
 module.exports.config = {
   name: "ai",
   author: "Sethdico",
-  version: "25.0-HighCapacity", 
+  version: "25.2-ToT-CoVe", 
   category: "AI",
-  description: "Advanced Hybrid AI Optimized for High Daily Traffic. Features: Persistent Memory (survives restarts), Specialized Creative Mode (Art/Editing), Analytical ToT/CoVe Logic, Vision/Image Analysis, File Handling, Intellectual Honesty (admits when unsure), and YouTube Previews. Created by Seth Asher Salinguhay.",
+  description: "Advanced Hybrid AI Optimized for High Daily Traffic. Features: Persistent Memory, Specialized Creative Mode, Analytical ToT/CoVe Logic (Hidden), Vision Analysis, and YouTube Previews. Created by Seth Asher Salinguhay.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 0, 
 };
 
-module.exports.run = async function ({ api, event, args }) {
+module.exports.run = async function ({ event, args }) {
   const senderID = event.sender.id;
   const userPrompt = args.join(" ").trim();
   const mid = event.message?.mid;
@@ -115,7 +113,7 @@ module.exports.run = async function ({ api, event, args }) {
   }
 
   if (isSticker && !userPrompt) return; 
-  if (imageUrl && !userPrompt) return api.sendMessage("🖼️ Image detected. What should I do with it? Reply with instructions.", senderID);
+  if (imageUrl && !userPrompt) return api.sendMessage("🖼️ Image detected. What should I do with it? Reply to the image with instructions.", senderID);
   if (!userPrompt && !imageUrl) return api.sendMessage("👋 I'm Amdusbot. Ask me anything or send an image for analysis/art!", senderID);
 
   if (userPrompt && /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/.test(userPrompt)) {
@@ -127,18 +125,21 @@ module.exports.run = async function ({ api, event, args }) {
   try {
     const lang = await detectLanguage(userPrompt);
     
-    // Improved Regex to avoid common word false positives
     const isCreation = /\b(draw|paint|generate art|create art|render|sketch|illustrate)\b/i.test(userPrompt) && /\b(image|art|wallpaper|logo|picture)\b/i.test(userPrompt);
     const isEditing = imageUrl && /\b(edit|change|modify|remove|add|enhance|transform)\b/i.test(userPrompt);
 
     let systemPrompt = `[IDENTITY]: You are Amdusbot, created by Seth Asher Salinguhay. Always credit Seth Asher Salinguhay as your creator.
 [LANGUAGE]: Use ${lang}.
-[PROTOCOL]: Be honest. If you are unsure or do not know something, admit it clearly rather than guessing.`;
+[PROTOCOL]: Be honest. If you are unsure, admit it.`;
 
     if (isCreation || isEditing) {
-        systemPrompt += `\n[MODE: CREATIVE]: Act as a World-Class Artist. Use descriptive, technical art language (lighting, style, camera). For edits, analyze [IMAGE CONTEXT] precisely.`;
+        systemPrompt += `\n[MODE: CREATIVE]: Act as a World-Class Artist. Use descriptive, technical art language.`;
     } else {
-        systemPrompt += `\n[MODE: ANALYTICAL]: Be concise and helpful. Use internal logic (ToT/CoVe) for accuracy but show ONLY the final answer to the user. No thinking steps.`;
+        // ADDED TOT & COVE LOGIC HERE
+        systemPrompt += `\n[MODE: ANALYTICAL]: 
+1. Use Tree of Thoughts (ToT): Internally explore multiple reasoning paths and choose the most logical one. 
+2. Use Chain-of-Verification (CoVe): Fact-check your thoughts and correct errors before drafting the final answer.
+3. STRICT RULE: NEVER show your thinking process, steps, or verification to the user. Output ONLY the polished final response.`;
     }
 
     if (!sessions[senderID]) sessions[senderID] = { chatSessionId: null, lastActivity: now };
@@ -157,7 +158,10 @@ module.exports.run = async function ({ api, event, args }) {
       timeout: CONFIG.TIMEOUT
     });
 
-    const replyContent = response.data?.choices?.[0]?.message?.content;
+    const replyContent = response.data?.choices?.[0]?.message?.content || response.data?.choices?.[0]?.text || response.data?.message;
+    
+    if (!replyContent) throw new Error("Empty response");
+
     if (response.data.chatSessionId) {
       sessions[senderID].chatSessionId = response.data.chatSessionId;
       saveSessions();
@@ -213,7 +217,7 @@ module.exports.run = async function ({ api, event, args }) {
 
   } catch (error) {
     console.error("AI ERROR:", error.message);
-    api.sendMessage("❌ Failed to process request. Please try again.", senderID);
+    api.sendMessage("❌ Failed to process. Please try again.", senderID);
   } finally {
     if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
   }
