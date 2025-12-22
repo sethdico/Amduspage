@@ -1,36 +1,52 @@
 const axios = require("axios");
 
 module.exports.config = {
-    name: "define",
+    name: "dict",
     author: "Sethdico",
-    version: "6.0-HYBRID", 
+    version: "6.1-HYBRID-RANDOM", 
     category: "Utility",
-    description: "Merriam-Webster + Urban Dictionary (Slang) Integration.",
+    description: "Merriam-Webster + Urban Dictionary (Slang) Integration with Real Randomization.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
 };
 
 module.exports.run = async function ({ event, args }) {
+    const { api } = global.client ? global.client : { api: { sendMessage: () => {}, sendTypingIndicator: () => {}, sendAttachment: () => {} } }; // Fallback for safety if api isn't global
     let input = args.join(" ").trim();
     let forceSlang = false;
 
-    // 0. Handle "Random"
-    if (input.toLowerCase() === "random") {
-        const randomWords = [
-            "serendipity", "petrichor", "sonder", "defenestration", "limerence", 
-            "yolo", "yeet", "rizz", "effervescent", "vellichor", "sigma", "fanum tax"
-        ];
-        input = randomWords[Math.floor(Math.random() * randomWords.length)];
-    }
-
-    // 1. Check for "slang" keyword triggers
+    // 1. Check for "slang" keyword triggers FIRST
+    // We do this first so we know if the user wants a random SLANG word or standard word
     if (args[0]?.toLowerCase() === "slang" || args[0]?.toLowerCase() === "urban") {
         forceSlang = true;
         input = args.slice(1).join(" ").trim();
     }
 
-    if (!input) return api.sendMessage("📖 **Usage:**\n• define <word> (Standard)\n• define slang <word> (Street)\n• define random", event.sender.id);
+    // 2. Handle "Random" - Now fetches from APIs
+    if (input.toLowerCase() === "random") {
+        try {
+            if (forceSlang) {
+                // Fetch random slang from Urban Dictionary
+                const rndRes = await axios.get("https://api.urbandictionary.com/v0/random");
+                if (rndRes.data.list && rndRes.data.list.length > 0) {
+                    input = rndRes.data.list[0].word;
+                }
+            } else {
+                // Fetch random standard word from Random Word API
+                const rndRes = await axios.get("https://random-word-api.herokuapp.com/word?number=1");
+                if (rndRes.data && rndRes.data.length > 0) {
+                    input = rndRes.data[0];
+                }
+            }
+        } catch (e) {
+            // Fallback to a hardcoded list ONLY if the API fails
+            const backupWords = ["serendipity", "petrichor", "sonder", "defenestration", "limerence"];
+            input = backupWords[Math.floor(Math.random() * backupWords.length)];
+        }
+    }
+
+    if (!input) return api.sendMessage("📖 **Usage:**\n• define <word> (Standard)\n• define slang <word> (Street)\n• define random (Surprise me)\n• define slang random (Random Slang)", event.sender.id);
 
     api.sendTypingIndicator(true, event.sender.id);
 
@@ -39,7 +55,7 @@ module.exports.run = async function ({ event, args }) {
         return searchUrbanDictionary(input, event);
     }
 
-    // 2. Try Merriam-Webster (Standard)
+    // 3. Try Merriam-Webster (Standard)
     try {
         const word = input.replace(/[^a-zA-Z\s-]/g, "").toLowerCase();
         const apiKey = "0a415fd9-1ec3-4145-9f53-d534da653b1f"; // Your Collegiate Key
