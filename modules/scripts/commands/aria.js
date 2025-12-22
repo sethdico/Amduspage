@@ -1,12 +1,19 @@
 const axios = require("axios");
-const aiUtils = require("./ai-utils");
+const fs = require("fs");
+const path = require("path");
+
+const SESSION_FILE = path.join(__dirname, "aria_sessions.json");
+let sessions = {};
+try { if (fs.existsSync(SESSION_FILE)) sessions = JSON.parse(fs.readFileSync(SESSION_FILE, "utf-8")); } catch (e) { sessions = {}; }
+
+function save() { fs.writeFileSync(SESSION_FILE, JSON.stringify(sessions, null, 2)); }
 
 module.exports.config = {
   name: "aria",
   author: "Sethdico",
-  version: "3.0-Fixed",
+  version: "4.0-Standalone",
   category: "AI",
-  description: "Aria AI with conversation memory. Use 'aria clear' to reset.",
+  description: "Aria AI.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 5,
@@ -17,47 +24,34 @@ module.exports.run = async ({ event, args, api }) => {
   const senderID = event.sender.id;
 
   if (query.toLowerCase() === "clear") {
-    aiUtils.clearSession(senderID, "aria");
+    delete sessions[senderID];
+    save();
     return api.sendMessage("🧹 Aria conversation cleared!", senderID);
   }
 
-  if (!query) {
-    return api.sendMessage(
-      "🤖 Usage: aria <question>\n\nTip: I remember our conversation! Use 'aria clear' to reset.",
-      senderID
-    );
-  }
+  if (!query) return api.sendMessage("🤖 Usage: aria <question>", senderID);
 
-  api.sendTypingIndicator(true, senderID);
+  if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
 
   try {
-    const session = aiUtils.getOrCreateSession(senderID, "aria");
-    session.messages.push({ role: "user", content: query });
+    const res = await axios.get("https://betadash-api-swordslush-production.up.railway.app/Aria", {
+      params: { ask: query, userid: senderID },
+      timeout: 60000
+    });
 
-    const result = await aiUtils.safeApiCall(
-      "https://betadash-api-swordslush-production.up.railway.app/Aria",
-      { ask: query, userid: senderID },
-      60000
-    );
+    const answer = res.data.response || res.data.result || res.data.content || "❌ No response.";
+    
+    const msg = `🤖 **Aria AI**\n───────────────\n${answer}\n───────────────`;
+    await api.sendMessage(msg, senderID);
 
-    if (!result.success) {
-      throw new Error(result.error);
-    }
+    // Memory Logic
+    if (!sessions[senderID]) sessions[senderID] = [];
+    sessions[senderID].push({ role: "user", content: query }, { role: "assistant", content: answer });
+    save();
 
-    const answer = aiUtils.extractResponse(result.data);
-
-    if (answer) {
-      session.messages.push({ role: "assistant", content: answer });
-      aiUtils.updateSession(senderID, "aria", session);
-      
-      await aiUtils.formatAIResponse(answer, senderID, api, "🤖 Aria AI");
-    } else {
-      api.sendMessage("❌ Aria returned empty response.", senderID);
-    }
   } catch (e) {
-    console.error("Aria Error:", e.message);
-    await aiUtils.handleAPIError(e, senderID, api, "Aria");
+    api.sendMessage("❌ Aria is currently unavailable.", senderID);
   } finally {
-    api.sendTypingIndicator(false, senderID);
+    if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
   }
 };
