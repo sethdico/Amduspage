@@ -97,7 +97,7 @@ module.exports.run = async function ({ event, args }) {
 
   if (isSticker && !userPrompt) return; 
   if (imageUrl && !userPrompt) {
-    return api.sendMessage("🖼️ I see the image! What should I do? (Analyze, Edit, or Extract text?)", senderID);
+    return api.sendMessage("🖼️ I see the image! What should I do? reply to the image and tell me your instructions.", senderID);
   }
   if (!userPrompt && !imageUrl) return api.sendMessage("👋 Hi! I'm Amdusbot. Ask me anything or send an image!", senderID);
 
