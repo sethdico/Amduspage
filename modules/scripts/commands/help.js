@@ -3,7 +3,7 @@ const config = require("../../../config.json");
 module.exports.config = {
   name: "help",
   author: "Sethdico",
-  version: "6.5-Detailed",
+  version: "6.5-Fixed",
   category: "Utility",
   description: "View command list or details of a specific command.",
   adminOnly: false,
@@ -11,8 +11,8 @@ module.exports.config = {
   cooldown: 3,
 };
 
-module.exports.run = async function ({ api, event, args }) {
-  const { senderID } = event;
+module.exports.run = async function ({ event, args }) {
+  const senderID = event.sender.id;
   const prefix = config.PREFIX || "/";
   const isAdmin = config.ADMINS.includes(senderID);
   const commands = global.client.commands;
@@ -42,7 +42,7 @@ module.exports.run = async function ({ api, event, args }) {
 
   try {
     // 1. INDIVIDUAL COMMAND INFO
-    if (input && (commands.has(input) || global.client.aliases.get(input))) {
+    if (input && (commands.has(input) || global.client.aliases.has(input))) {
       const cmdName = commands.has(input) ? input : global.client.aliases.get(input);
       const cmd = commands.get(cmdName).config;
       const details = commandDetails[cmd.name] || {};
@@ -52,7 +52,7 @@ module.exports.run = async function ({ api, event, args }) {
         `📝 **Description:** ${details.note || cmd.description || "No description."}\n` +
         `📁 **Category:** ${cmd.category}\n` +
         `🔧 **Usage:** ${cmd.usePrefix ? prefix : ""}${cmd.name} ${details.hint || ""}\n` +
-        `${cmd.aliases ? `🔗 **Aliases:** ${cmd.aliases.join(", ")}` : ""}\n` +
+        `${cmd.aliases && cmd.aliases.length > 0 ? `🔗 **Aliases:** ${cmd.aliases.join(", ")}` : ""}\n` +
         `━━━━━━━━━━━━━━━━`;
 
       return api.sendButton(msg, [{ type: "postback", title: "⬅️ Back", payload: "help" }], senderID);
@@ -67,7 +67,7 @@ module.exports.run = async function ({ api, event, args }) {
       categories[cat].push(cmd.config);
     });
 
-    // 2. FOLDER DETAIL VIEW
+    // 2. FOLDER DETAIL VIEW (Shows Name, Desc, and Usage)
     const matchedCat = Object.keys(categories).find(c => c.toLowerCase() === input);
     if (matchedCat) {
       let catMsg = `📂 **FOLDER: ${matchedCat.toUpperCase()}**\n━━━━━━━━━━━━━━━━\n`;
@@ -103,6 +103,5 @@ module.exports.run = async function ({ api, event, args }) {
 
   } catch (err) {
     console.log(err);
-    api.sendMessage("An error occurred while running the help command.", senderID);
   }
 };
