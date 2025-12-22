@@ -1,69 +1,27 @@
-const axios = require("axios")
+const config = require("../config.json");
+const theme = require("../website/web.js").getTheme();
 
-/**
- * Shared utilities for AI commands to reduce code duplication
- */
-
-// Response extractor - handles multiple API response formats
-function extractResponse(data) {
-  return data.response || data.result || data.answer || data.message || data.text || data.content || ""
+function getEventType(event) {
+  return new Promise((resolve) => {
+    let type = "unknown";
+    if (event.message) {
+      if (event.message.attachments) type = "attachments";
+      else if (event.message.reply_to) type = "message_reply";
+      else type = "message";
+    } else if (event.postback) type = "postback";
+    resolve(type);
+  });
 }
 
-// Safe API call wrapper with timeout and error handling
-async function safeApiCall(url, params = {}, timeout = 30000) {
-  try {
-    const response = await axios.get(url, {
-      params,
-      timeout,
-      headers: { "User-Agent": "Mozilla/5.0" },
-    })
-    return { success: true, data: response.data }
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message,
-      isTimeout: error.code === "ECONNABORTED",
-    }
-  }
+function log(event) {
+  // ✅ Fixed: Check both ADMIN and ADMINS
+  const adminList = config.ADMINS || config.ADMIN || [];
+  let sender = adminList.includes(event.sender?.id) ? "ADMIN" : "USER";
+  if (event.message?.is_echo) sender = "BOT";
+  
+  const maskedId = event.sender?.id ? `...${event.sender.id.slice(-4)}` : "unknown";
+  
+  console.log(`${theme.gradient.multiline(sender)} (${maskedId}): Event Received`);
 }
 
-// Format AI response with consistent styling
-function formatAIResponse(title, content, model = "") {
-  const modelText = model ? ` (${model})` : ""
-  return `${title}${modelText}\n━━━━━━━━━━━━━━━━\n${content}\n━━━━━━━━━━━━━━━━`
-}
-
-// Stream decoder for Quillbot-style responses
-function decodeStreamResponse(rawStream) {
-  if (!rawStream || !rawStream.includes("event: output_done")) {
-    return null
-  }
-
-  try {
-    const splitStream = rawStream.split("event: output_done")
-    const dataPart = splitStream[1].split("data: ")[1]
-    const jsonString = dataPart.split("event: status")[0].trim()
-    const parsedData = JSON.parse(jsonString)
-    return parsedData.text || null
-  } catch (e) {
-    return null
-  }
-}
-
-// Typing indicator wrapper
-async function withTyping(senderID, callback, api) {
-  if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID)
-  try {
-    await callback()
-  } finally {
-    if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID)
-  }
-}
-
-module.exports = {
-  extractResponse,
-  safeApiCall,
-  formatAIResponse,
-  decodeStreamResponse,
-  withTyping,
-}
+module.exports = { log, getEventType };
