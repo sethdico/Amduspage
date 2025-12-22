@@ -31,7 +31,7 @@ function saveSessions() {
 
 const rateLimitStore = new Map();
 
-// --- Maintenance Task (Runs every 30 mins) ---
+// --- Maintenance Task ---
 setInterval(() => {
     const now = Date.now();
     fs.readdir(CACHE_DIR, (err, files) => {
@@ -75,9 +75,9 @@ async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
 module.exports.config = {
   name: "ai",
   author: "Sethdico",
-  version: "26.0-NuclearFix", 
+  version: "28.0-BulletproofDecoder", 
   category: "AI",
-  description: "Advanced Hybrid AI. Features: Memory, Creative Mode, ToT/CoVe Logic, Vision, YouTube Previews, and Guaranteed File Decoding.",
+  description: "Advanced Hybrid AI. Features: Memory, Creative Mode, ToT/CoVe Logic, Vision, and Bulletproof File Decoding.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 0, 
@@ -167,85 +167,86 @@ module.exports.run = async function ({ event, args }) {
     }
 
     // =========================================================================
-    // 🛠️ ULTIMATE BASE64 DECODER (Priority 1)
-    // Checks for existence of "fileBase64". If found, WE DO NOT FALL THROUGH.
+    // 🛠️ BULLETPROOF DECODER (Regex across lines)
     // =========================================================================
-    if (replyContent.includes("fileBase64")) {
-        console.log("LOG: Base64 File Detected. Attempting Extraction...");
-        
+    
+    // Check if "fileBase64" key exists anywhere in the string
+    if (/fileBase64/i.test(replyContent)) {
+        console.log("LOG: Base64 detected. Decoders engaging...");
+
         try {
-            // Manual String Extraction to ignore all garbage (headers, footers, newlines)
-            // 1. Find file name
-            const fnKey = '"fileName"';
-            const fnStart = replyContent.indexOf(fnKey);
+            // REGEX EXPLANATION:
+            // ["']?fileBase64["']?   -> Match "fileBase64" with optional quotes
+            // \s*:\s*                -> Match colon with optional whitespace
+            // ["']                   -> Match the opening quote
+            // ([\s\S]*?)             -> CAPTURE GROUP 1: Match ANY character (including newlines) non-greedily
+            // ["']\s*[,}]            -> Stop at the closing quote followed by a comma or closing brace
             
-            // 2. Find base64 data
-            const b64Key = '"fileBase64"';
-            const b64Start = replyContent.indexOf(b64Key);
+            const base64Regex = /["']?fileBase64["']?\s*:\s*["']([\s\S]*?)["']\s*[,}]/;
+            const fileNameRegex = /["']?fileName["']?\s*:\s*["']([\s\S]*?)["']/;
 
-            if (fnStart !== -1 && b64Start !== -1) {
-                // Parse Name
-                // Look for the colon and quote after key
-                const nameValueStart = replyContent.indexOf('"', fnStart + fnKey.length + 1) + 1;
-                const nameValueEnd = replyContent.indexOf('"', nameValueStart);
-                const rawName = replyContent.substring(nameValueStart, nameValueEnd);
+            const base64Match = replyContent.match(base64Regex);
+            const fileNameMatch = replyContent.match(fileNameRegex);
 
-                // Parse Base64
-                // Look for the colon and quote after key
-                const b64ValueStart = replyContent.indexOf('"', b64Start + b64Key.length + 1) + 1;
-                const b64ValueEnd = replyContent.indexOf('"', b64ValueStart);
-                let rawBase64 = replyContent.substring(b64ValueStart, b64ValueEnd);
-
-                // Clean prefix
-                if (rawBase64.startsWith("data:")) {
+            if (base64Match) {
+                let rawBase64 = base64Match[1];
+                let fileName = fileNameMatch ? fileNameMatch[1] : `amdus_file_${Date.now()}.txt`;
+                
+                // 1. Clean Data URI Prefix (data:text/plain;base64, etc.)
+                if (rawBase64.includes("base64,")) {
                     rawBase64 = rawBase64.split("base64,")[1];
                 }
 
-                // Decode
-                const buffer = Buffer.from(rawBase64, 'base64');
-                const cleanFileName = rawName.replace(/[^a-zA-Z0-9._-]/g, "_");
-                const filePath = path.join(CACHE_DIR, cleanFileName);
+                // 2. CRITICAL: Remove ALL whitespace (newlines, spaces, tabs) from the encoded string
+                // This fixes the issue where JSON strings span multiple lines
+                rawBase64 = rawBase64.replace(/\s/g, "");
 
+                // 3. Decode & Save
+                const buffer = Buffer.from(rawBase64, 'base64');
+                const cleanFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+                const filePath = path.join(CACHE_DIR, cleanFileName);
+                
                 fs.writeFileSync(filePath, buffer);
 
-                // Send a clean text message (Everything BEFORE the file start)
-                // We use the first curly brace as the cutoff point
-                const cutoff = replyContent.indexOf("{");
-                let introText = "📂 Here is your file:";
-                if (cutoff > 5) {
-                    introText = replyContent.substring(0, cutoff).trim();
+                // 4. Send Context Text (Strip the JSON/Code Block)
+                // We assume anything before the first "{" is safe to send as chat
+                const braceIndex = replyContent.indexOf("{");
+                let chatText = "📂 File ready:";
+                
+                if (braceIndex > 1) {
+                    chatText = replyContent.substring(0, braceIndex).trim();
+                    // Clean up common AI artifacts
+                    chatText = chatText.replace(/--- START OF FILE.*?---/g, "").trim();
+                    chatText = chatText.replace(/```json/g, "").trim();
                 }
                 
-                // Don't send the "START OF FILE" header if it looks ugly
-                if (introText.includes("START OF FILE")) {
-                    introText = "📂 File generated successfully.";
-                }
+                if (chatText) await api.sendMessage(chatText, senderID);
 
-                await api.sendMessage(introText, senderID);
-
-                // Send File
+                // 5. Send Attachment
                 const ext = path.extname(cleanFileName).toLowerCase();
+                // Map common extensions to Facebook types
                 const type = [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext) ? "image" : "file";
+                
                 await api.sendAttachment(type, filePath, senderID);
 
                 // Cleanup
-                setTimeout(() => { if (fs.existsSync(filePath)) fs.unlink(filePath, () => {}); }, 30000);
+                setTimeout(() => { if (fs.existsSync(filePath)) fs.unlink(filePath, () => {}); }, 60000);
             } else {
-                throw new Error("Keys not found in order");
+                throw new Error("Regex failed to capture Base64 content.");
             }
         } catch (e) {
-            console.error("Decoder Failed:", e.message);
-            api.sendMessage("⚠️ The AI tried to send a file, but the data was malformed. Please try again.", senderID);
+            console.error("Decoder Error:", e.message);
+            api.sendMessage("⚠️ I received a file from the AI, but I failed to decode it. Please try again.", senderID);
         }
 
-        // 🛑 CRITICAL: FORCE STOP. Do not allow raw text to be sent.
+        // 🛑 STOP: Never let the raw text fall through
         if (api.setMessageReaction) api.setMessageReaction("✅", mid);
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
         return; 
     }
     // =========================================================================
 
-    // --- STANDARD URL DOWNLOADER (Priority 2) ---
+    // --- STANDARD URL DOWNLOADER (Fallback) ---
     const fileRegex = /(https?:\/\/app\.chipp\.ai\/api\/downloads\/downloadFile[^)\s"]+|https?:\/\/(?!(?:scontent|static)\.xx\.fbcdn\.net)[^)\s"]+\.(?:pdf|docx|doc|xlsx|xls|pptx|ppt|txt|csv|zip|rar|7z|jpg|jpeg|png|gif|mp3|wav|mp4))/i;
     const match = replyContent.match(fileRegex);
 
@@ -289,7 +290,7 @@ module.exports.run = async function ({ event, args }) {
       }
     } else {
       // ⚠️ Standard Message Handler
-      // ONLY runs if no base64 and no url were found.
+      // Code only reaches here if "fileBase64" was NOT found
       await api.sendMessage(replyContent, senderID);
     }
 
