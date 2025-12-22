@@ -2,7 +2,7 @@ const axios = require("axios");
 module.exports.config = {
   name: "joke",
   author: "Sethdico",
-  version: "1.0",
+  version: "1.1",
   category: "Fun",
   description: "Get a random joke (programming, general, etc.)",
   adminOnly: false,
@@ -12,7 +12,7 @@ module.exports.config = {
 module.exports.run = async function ({ event, args }) {
   const senderID = event.sender.id;
   const type = args[0]?.toLowerCase(); // e.g., 'programming' or 'general'
-  // Valid types for this API: general, programming, knock-knock, anime
+  // Valid types/endpoints logic
   const apiUrl = type ? `https:                                                                                                             
   try {
     const response = await axios.get(apiUrl);
@@ -42,11 +42,7 @@ module.exports.run = async function ({ event, args }) {
       // 3. Send the Punchline
       const msg = `😆 **${jokeData.punchline}**`;
       const buttons = [
-        {
-          type: "postback",
-          title: "🎲 Another One",
-          payload: type ? `joke ${type}` : "joke"
-        }
+        { type: "postback", title: "🎲 Another One", payload: type ? `joke ${type}` : "joke" }
       ];
       await api.sendButton(msg, buttons, senderID);
       if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
