@@ -75,9 +75,9 @@ async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
 module.exports.config = {
   name: "ai",
   author: "Sethdico",
-  version: "25.5-JSONFix", 
+  version: "25.6-JSON-Final", 
   category: "AI",
-  description: "Advanced Hybrid AI. Features: Memory, Creative Mode, ToT/CoVe Logic, Vision, YouTube Previews, and Robust File Support.",
+  description: "Advanced Hybrid AI. Features: Memory, Creative Mode, ToT/CoVe Logic, Vision, YouTube Previews, and Robust Base64 Decoder.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 0, 
@@ -166,52 +166,77 @@ module.exports.run = async function ({ event, args }) {
       saveSessions();
     }
 
-    // --- 🔍 AGGRESSIVE JSON BASE64 DETECTION ---
-    if (replyContent.includes("fileBase64") || replyContent.includes("fileName")) {
+    // --- 🛠️ ROBUST JSON BASE64 DECODER ---
+    if (replyContent.includes("fileBase64") && replyContent.includes("fileName")) {
         try {
-            // 1. Clean Markdown code blocks (e.g. ```json ... ```)
-            let cleanJson = replyContent.replace(/```json/g, "").replace(/```/g, "").trim();
+            let parsed = null;
             
-            // 2. Extract the JSON object using brace matching
-            const firstBrace = cleanJson.indexOf("{");
-            const lastBrace = cleanJson.lastIndexOf("}");
-            
-            if (firstBrace !== -1 && lastBrace !== -1) {
-                const jsonString = cleanJson.substring(firstBrace, lastBrace + 1);
+            // 1. Try parsing the whole string directly (in case it's pure JSON)
+            try {
+                parsed = JSON.parse(replyContent);
+            } catch (e1) {
+                // 2. If valid JSON is wrapped in text, extract it by finding outer braces
+                const firstBrace = replyContent.indexOf("{");
+                const lastBrace = replyContent.lastIndexOf("}");
                 
-                // 3. Parse JSON
-                const parsed = JSON.parse(jsonString);
-                
-                if (parsed.fileName && parsed.fileBase64) {
-                    const cleanFileName = parsed.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-                    
-                    // 4. Decode Base64
-                    const base64Data = parsed.fileBase64.replace(/^data:.*?;base64,/, "");
-                    const buffer = Buffer.from(base64Data, 'base64');
-                    
-                    // 5. Save to Cache
-                    const filePath = path.join(CACHE_DIR, cleanFileName);
-                    fs.writeFileSync(filePath, buffer);
-                    
-                    // 6. Send Attachment
-                    const ext = path.extname(cleanFileName).toLowerCase();
-                    const type = [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext) ? "image" : "file";
-                    
-                    await api.sendAttachment(type, filePath, senderID);
-                    
-                    // 7. Cleanup & Exit (Don't send the JSON text)
-                    if (api.setMessageReaction) api.setMessageReaction("✅", mid);
-                    setTimeout(() => { if (fs.existsSync(filePath)) fs.unlink(filePath, () => {}); }, 30000);
-                    return; // 🛑 STOP HERE
+                if (firstBrace !== -1 && lastBrace !== -1) {
+                    const extracted = replyContent.substring(firstBrace, lastBrace + 1);
+                    try {
+                        parsed = JSON.parse(extracted);
+                    } catch (e2) {
+                        // 3. Last resort: Clean Markdown code blocks and try again
+                        const cleaned = extracted.replace(/```json/g, "").replace(/```/g, "").trim();
+                        try {
+                           parsed = JSON.parse(cleaned);
+                        } catch (e3) {
+                           console.error("JSON Extraction totally failed.");
+                        }
+                    }
                 }
             }
+
+            if (parsed && parsed.fileName && parsed.fileBase64) {
+                const cleanFileName = parsed.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+                
+                // IMPORTANT: Strip the "data:text/plain;base64," prefix if it exists
+                let base64Data = parsed.fileBase64;
+                if (base64Data.includes("base64,")) {
+                    base64Data = base64Data.split("base64,")[1];
+                }
+
+                // Decode
+                const buffer = Buffer.from(base64Data, 'base64');
+                const filePath = path.join(CACHE_DIR, cleanFileName);
+
+                fs.writeFileSync(filePath, buffer);
+
+                // Send the text ONLY if there was text outside the JSON
+                // (Optional: You can disable this if you just want the file)
+                const textWithoutJson = replyContent.replace(JSON.stringify(parsed), "").replace(/```json/g,"").replace(/```/g,"").trim();
+                if (textWithoutJson.length > 5 && textWithoutJson.length < 500) {
+                     await api.sendMessage(textWithoutJson, senderID);
+                }
+
+                // Send the File
+                const ext = path.extname(cleanFileName).toLowerCase();
+                const type = [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext) ? "image" : "file";
+                
+                await api.sendAttachment(type, filePath, senderID);
+                
+                // Reaction & Cleanup
+                if (api.setMessageReaction) api.setMessageReaction("✅", mid);
+                if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
+                
+                setTimeout(() => { if (fs.existsSync(filePath)) fs.unlink(filePath, () => {}); }, 30000);
+                
+                return; // 🛑 EXIT FUNCTION TO PREVENT SENDING RAW JSON TEXT
+            }
         } catch (e) {
-            console.error("JSON Parse Error:", e.message);
-            // If parsing failed, fall through to normal text sending but log it
+            console.error("Base64 Logic Error:", e.message);
         }
     }
 
-    // --- EXISTING URL FILE HANDLER ---
+    // --- STANDARD URL DOWNLOADER (Backwards Compatibility) ---
     const fileRegex = /(https?:\/\/app\.chipp\.ai\/api\/downloads\/downloadFile[^)\s"]+|https?:\/\/(?!(?:scontent|static)\.xx\.fbcdn\.net)[^)\s"]+\.(?:pdf|docx|doc|xlsx|xls|pptx|ppt|txt|csv|zip|rar|7z|jpg|jpeg|png|gif|mp3|wav|mp4))/i;
     const match = replyContent.match(fileRegex);
 
@@ -234,7 +259,6 @@ module.exports.run = async function ({ event, args }) {
       const filePath = path.join(CACHE_DIR, fileName);
 
       try {
-          // Use arraybuffer for safer downloads
           const fileRes = await axios.get(fileUrl, { 
               responseType: 'arraybuffer',
               headers: { "User-Agent": "Mozilla/5.0" }
@@ -255,6 +279,7 @@ module.exports.run = async function ({ event, args }) {
           setTimeout(() => { if (fs.existsSync(filePath)) fs.unlink(filePath, () => {}); }, 30000);
       }
     } else {
+      // ⚠️ Only send replyContent if it wasn't handled as a JSON file above
       await api.sendMessage(replyContent, senderID);
     }
 
