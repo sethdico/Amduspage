@@ -75,9 +75,9 @@ async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
 module.exports.config = {
   name: "ai",
   author: "Sethdico",
-  version: "25.4-Base64Fix", 
+  version: "25.5-JSONFix", 
   category: "AI",
-  description: "Advanced Hybrid AI. Features: Memory, Creative Mode, ToT/CoVe Logic, Vision, YouTube Previews, and Base64 File Support.",
+  description: "Advanced Hybrid AI. Features: Memory, Creative Mode, ToT/CoVe Logic, Vision, YouTube Previews, and Robust File Support.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 0, 
@@ -157,7 +157,7 @@ module.exports.run = async function ({ event, args }) {
       timeout: CONFIG.TIMEOUT
     });
 
-    const replyContent = response.data?.choices?.[0]?.message?.content || response.data?.choices?.[0]?.text || response.data?.message;
+    let replyContent = response.data?.choices?.[0]?.message?.content || response.data?.choices?.[0]?.text || response.data?.message;
     
     if (!replyContent) throw new Error("Empty response");
 
@@ -166,54 +166,49 @@ module.exports.run = async function ({ event, args }) {
       saveSessions();
     }
 
-    // --- 🆕 JSON BASE64 FILE HANDLER (Fix for user issue) ---
-    // Sometimes the API returns a JSON string with raw file data instead of a link.
-    let fileHandled = false;
-    try {
-        // Look for JSON structure containing "fileName" and "fileBase64"
-        const jsonMatch = replyContent.match(/\{[\s\S]*?"fileName"[\s\S]*?"fileBase64"[\s\S]*?\}/);
-        
-        if (jsonMatch) {
-            const jsonStr = jsonMatch[0];
-            const parsed = JSON.parse(jsonStr);
+    // --- 🔍 AGGRESSIVE JSON BASE64 DETECTION ---
+    if (replyContent.includes("fileBase64") || replyContent.includes("fileName")) {
+        try {
+            // 1. Clean Markdown code blocks (e.g. ```json ... ```)
+            let cleanJson = replyContent.replace(/```json/g, "").replace(/```/g, "").trim();
             
-            if (parsed.fileName && parsed.fileBase64) {
-                // Decode Base64 (Remove the data:text/plain;base64, prefix if present)
-                const base64Content = parsed.fileBase64.includes("base64,") 
-                    ? parsed.fileBase64.split("base64,")[1] 
-                    : parsed.fileBase64;
+            // 2. Extract the JSON object using brace matching
+            const firstBrace = cleanJson.indexOf("{");
+            const lastBrace = cleanJson.lastIndexOf("}");
+            
+            if (firstBrace !== -1 && lastBrace !== -1) {
+                const jsonString = cleanJson.substring(firstBrace, lastBrace + 1);
                 
-                const buffer = Buffer.from(base64Content, 'base64');
-                const cleanFileName = parsed.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-                const filePath = path.join(CACHE_DIR, cleanFileName);
-
-                fs.writeFileSync(filePath, buffer);
-
-                // Send the text part (if any) minus the ugly JSON
-                const remainingText = replyContent.replace(jsonStr, "").trim();
-                if (remainingText) await api.sendMessage(remainingText, senderID);
-
-                // Determine file type
-                const ext = path.extname(cleanFileName).toLowerCase();
-                const type = [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext) ? "image" : "file";
+                // 3. Parse JSON
+                const parsed = JSON.parse(jsonString);
                 
-                // Send Attachment
-                await api.sendAttachment(type, filePath, senderID);
-
-                fileHandled = true;
-                
-                // Cleanup
-                setTimeout(() => { if (fs.existsSync(filePath)) fs.unlink(filePath, () => {}); }, 30000);
+                if (parsed.fileName && parsed.fileBase64) {
+                    const cleanFileName = parsed.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+                    
+                    // 4. Decode Base64
+                    const base64Data = parsed.fileBase64.replace(/^data:.*?;base64,/, "");
+                    const buffer = Buffer.from(base64Data, 'base64');
+                    
+                    // 5. Save to Cache
+                    const filePath = path.join(CACHE_DIR, cleanFileName);
+                    fs.writeFileSync(filePath, buffer);
+                    
+                    // 6. Send Attachment
+                    const ext = path.extname(cleanFileName).toLowerCase();
+                    const type = [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext) ? "image" : "file";
+                    
+                    await api.sendAttachment(type, filePath, senderID);
+                    
+                    // 7. Cleanup & Exit (Don't send the JSON text)
+                    if (api.setMessageReaction) api.setMessageReaction("✅", mid);
+                    setTimeout(() => { if (fs.existsSync(filePath)) fs.unlink(filePath, () => {}); }, 30000);
+                    return; // 🛑 STOP HERE
+                }
             }
+        } catch (e) {
+            console.error("JSON Parse Error:", e.message);
+            // If parsing failed, fall through to normal text sending but log it
         }
-    } catch (e) {
-        console.error("Base64 File Decode Error:", e.message);
-    }
-
-    if (fileHandled) {
-        if (api.setMessageReaction) api.setMessageReaction("✅", mid);
-        if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
-        return; // Stop here if we handled a base64 file
     }
 
     // --- EXISTING URL FILE HANDLER ---
