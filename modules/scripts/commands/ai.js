@@ -75,9 +75,9 @@ async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
 module.exports.config = {
   name: "ai",
   author: "Sethdico",
-  version: "25.6-JSON-Final", 
+  version: "25.7-DirectRegex", 
   category: "AI",
-  description: "Advanced Hybrid AI. Features: Memory, Creative Mode, ToT/CoVe Logic, Vision, YouTube Previews, and Robust Base64 Decoder.",
+  description: "Advanced Hybrid AI. Features: Memory, Creative Mode, ToT/CoVe Logic, Vision, YouTube Previews, and Direct File Decoding.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 0, 
@@ -166,77 +166,68 @@ module.exports.run = async function ({ event, args }) {
       saveSessions();
     }
 
-    // --- 🛠️ ROBUST JSON BASE64 DECODER ---
-    if (replyContent.includes("fileBase64") && replyContent.includes("fileName")) {
+    // --- 🛠️ PRIORITY 1: CHECK FOR EMBEDDED FILE (Direct Regex Extraction) ---
+    // We check for "fileBase64" keyword. If it exists, we assume the AI is trying to send a file.
+    if (replyContent.includes("fileBase64")) {
         try {
-            let parsed = null;
+            // 1. Extract File Name
+            // Matches: "fileName": "example.txt"  OR  "fileName":"example.txt"
+            const nameMatch = replyContent.match(/"fileName"\s*:\s*"([^"]+)"/);
             
-            // 1. Try parsing the whole string directly (in case it's pure JSON)
-            try {
-                parsed = JSON.parse(replyContent);
-            } catch (e1) {
-                // 2. If valid JSON is wrapped in text, extract it by finding outer braces
-                const firstBrace = replyContent.indexOf("{");
-                const lastBrace = replyContent.lastIndexOf("}");
-                
-                if (firstBrace !== -1 && lastBrace !== -1) {
-                    const extracted = replyContent.substring(firstBrace, lastBrace + 1);
-                    try {
-                        parsed = JSON.parse(extracted);
-                    } catch (e2) {
-                        // 3. Last resort: Clean Markdown code blocks and try again
-                        const cleaned = extracted.replace(/```json/g, "").replace(/```/g, "").trim();
-                        try {
-                           parsed = JSON.parse(cleaned);
-                        } catch (e3) {
-                           console.error("JSON Extraction totally failed.");
-                        }
-                    }
-                }
-            }
+            // 2. Extract Base64 Content
+            // Matches: "fileBase64": "..." (Greedy match to capture the whole string)
+            const base64Match = replyContent.match(/"fileBase64"\s*:\s*"([^"]+)"/);
 
-            if (parsed && parsed.fileName && parsed.fileBase64) {
-                const cleanFileName = parsed.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-                
-                // IMPORTANT: Strip the "data:text/plain;base64," prefix if it exists
-                let base64Data = parsed.fileBase64;
-                if (base64Data.includes("base64,")) {
-                    base64Data = base64Data.split("base64,")[1];
-                }
+            if (nameMatch && base64Match) {
+                let rawName = nameMatch[1];
+                let rawBase64 = base64Match[1];
 
-                // Decode
-                const buffer = Buffer.from(base64Data, 'base64');
+                // 3. Clean up the Base64 String
+                if (rawBase64.startsWith("data:")) {
+                    rawBase64 = rawBase64.split(",")[1];
+                }
+                
+                // 4. Create the Buffer
+                const buffer = Buffer.from(rawBase64, 'base64');
+                const cleanFileName = rawName.replace(/[^a-zA-Z0-9._-]/g, "_");
                 const filePath = path.join(CACHE_DIR, cleanFileName);
 
+                // 5. Write to Disk
                 fs.writeFileSync(filePath, buffer);
 
-                // Send the text ONLY if there was text outside the JSON
-                // (Optional: You can disable this if you just want the file)
-                const textWithoutJson = replyContent.replace(JSON.stringify(parsed), "").replace(/```json/g,"").replace(/```/g,"").trim();
-                if (textWithoutJson.length > 5 && textWithoutJson.length < 500) {
-                     await api.sendMessage(textWithoutJson, senderID);
+                // 6. Send any conversational text (remove the JSON part)
+                // We crudely strip the JSON block so the user sees only the text
+                const textOnly = replyContent.replace(/\{[\s\S]*?"fileBase64"[\s\S]*?\}/, "").replace(/```json/g, "").replace(/```/g, "").trim();
+                
+                if (textOnly.length > 2) {
+                    await api.sendMessage(textOnly, senderID);
+                } else {
+                    await api.sendMessage("📂 Decoded file:", senderID);
                 }
 
-                // Send the File
+                // 7. Send the Attachment
                 const ext = path.extname(cleanFileName).toLowerCase();
                 const type = [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext) ? "image" : "file";
                 
                 await api.sendAttachment(type, filePath, senderID);
-                
-                // Reaction & Cleanup
-                if (api.setMessageReaction) api.setMessageReaction("✅", mid);
-                if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
-                
+
+                // 8. Cleanup
                 setTimeout(() => { if (fs.existsSync(filePath)) fs.unlink(filePath, () => {}); }, 30000);
                 
-                return; // 🛑 EXIT FUNCTION TO PREVENT SENDING RAW JSON TEXT
+                // 🛑 CRITICAL: RETURN HERE to prevent the raw JSON from being sent below
+                if (api.setMessageReaction) api.setMessageReaction("✅", mid);
+                if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
+                return; 
             }
         } catch (e) {
-            console.error("Base64 Logic Error:", e.message);
+            console.error("Manual Regex Extraction Failed:", e.message);
+            // If regex fails, we sadly fall through, but at least we tried.
+            api.sendMessage("⚠️ I tried to generate a file but the data was corrupted.", senderID);
+            return; // Don't send the raw text if we *know* it failed to decode
         }
     }
 
-    // --- STANDARD URL DOWNLOADER (Backwards Compatibility) ---
+    // --- 🛠️ PRIORITY 2: CHECK FOR URL DOWNLOAD ---
     const fileRegex = /(https?:\/\/app\.chipp\.ai\/api\/downloads\/downloadFile[^)\s"]+|https?:\/\/(?!(?:scontent|static)\.xx\.fbcdn\.net)[^)\s"]+\.(?:pdf|docx|doc|xlsx|xls|pptx|ppt|txt|csv|zip|rar|7z|jpg|jpeg|png|gif|mp3|wav|mp4))/i;
     const match = replyContent.match(fileRegex);
 
@@ -279,7 +270,8 @@ module.exports.run = async function ({ event, args }) {
           setTimeout(() => { if (fs.existsSync(filePath)) fs.unlink(filePath, () => {}); }, 30000);
       }
     } else {
-      // ⚠️ Only send replyContent if it wasn't handled as a JSON file above
+      // ⚠️ Standard Message Handler
+      // This only runs if NO base64 file and NO url file were found.
       await api.sendMessage(replyContent, senderID);
     }
 
