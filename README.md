@@ -1,29 +1,42 @@
-# 🤖 Amdusbot V15.0
-**The Ultimate Multi-AI Messenger Assistant**
+# 🤖 Amdusbot V16.5
+The Ultimate High-Performance Multi-AI Messenger Assistant
 
-Amdusbot is a highly optimized Facebook Messenger bot designed for productivity, creativity, and natural conversation.
+Amdusbot is a blazing-fast Facebook Messenger bot with instant command execution, admin management, and AI features.
 
-## 🌟 Key Capabilities
-- **Multi-AI Brain**: Powered by Chipp.ai with real-time web access and cited sources.
-- **Natural Interaction**: Talk to the bot like a human—no prefixes needed for AI chat.
-- **Vision & Analysis**: Analyzes photos sent directly or as replies.
-- **Document Master**: Generates .pdf, .docx, .txt, and .xlsx files and sends them as real attachments.
-- **YouTube Link Summarizer**: Detects YouTube links to provide thumbnails and quick video summaries.
-- **Multimedia Support**: Download TikTok videos and generate AI Art.
+## 🚀 Key Features
+- *Hybrid AI Brain*: Switches between Analytical and Creative modes
+- *O(1) Command Lookup*: Map-based registry for instant responses
+- *Admin Security*: Ban/Unban system and restricted commands
+- *Smart UX*: Paginated help, interactive buttons, and joke delays
 
-## ⚙️ How It Works (The Logic)
-1. **Request Flow**: Facebook ping → `webhook.js` (logs & prunes data) → `page/main.js` (loads API tools) → `page/handler.js` (the brain).
-2. **Smart Fallback**: The handler checks for specific commands first. If none are found, it automatically triggers the `ai.js` command.
-3. **File Handling**: When the AI provides a download link, the bot downloads the file to a `cache` folder, verifies the size is under 25MB, uploads it to Facebook, and deletes the local copy after 60 seconds.
-4. **Privacy**: All tokens are hidden in Render Environment Variables.
+## 📂 Structure
+sethdico-my-pagebot/
+├── modules/scripts/commands/ # bot commands (.js)
+├── page/src/ # Facebook API wrappers
+├── index.js # server entry
+├── launcher.js # auto-restart
+├── webhook.js # event listener
+└── config.json # credentials
 
-## 🛠️ Installation
-1. **Deploy**: Connect this repository to [Render.com](https://render.com).
-2. **Configure Environment Variables**:
-   - `PAGE_ACCESS_TOKEN`: Your FB Page Token.
-   - `CHIPP_API_KEY`: Your Chipp.ai Key.
-   - `VERIFY_TOKEN`: Your webhook password.
-3. **Webhook Setup**: Use `https://your-app.onrender.com/webhook` in Meta Developers.
+## 🛠️ Setup
+1. Fill `config.json`:
+{
+  "PAGE_ACCESS_TOKEN": "...",
+  "VERIFY_TOKEN": "...",
+  "PREFIX": "/",
+  "ADMINS": ["YOUR_PSID"],
+  "API_VERSION": "v21.0"
+}
 
-## 👑 Credits
-Developed by **Seth Asher Salinguhay (Sethdico)**.
+2. Deploy to Render:
+- Set env vars: `PAGE_ACCESS_TOKEN`, `CHIPP_API_KEY`
+- Start command: `node launcher.js`
+- Webhook: `https://your-app.onrender.com/webhook`
+
+## 👮 Admin Commands
+- `uid`: Get user ID
+- `ban <ID>`: Block user
+- `unban <ID>`: Restore access
+- `admin list`: View banned users
+
+Made by Seth Asher Salinguhay (Sethdico). Respect API limits.
