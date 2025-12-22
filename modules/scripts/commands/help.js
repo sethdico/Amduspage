@@ -1,13 +1,11 @@
-const fs = require("fs");
-const path = require("path");
 const config = require("../../../config.json");
 
 module.exports.config = {
   name: "help",
   author: "Sethdico",
-  version: "4.0-Clean",
+  version: "5.0-Detailed",
   category: "Utility",
-  description: "Interactive command menu.",
+  description: "View command list or details of a specific command.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 3,
@@ -15,62 +13,76 @@ module.exports.config = {
 
 module.exports.run = async function ({ event, args }) {
   const senderID = event.sender.id;
+  const prefix = config.PREFIX;
   const isAdmin = config.ADMINS.includes(senderID);
-  
   const commands = global.client.commands;
+  const input = args[0]?.toLowerCase();
+
+  const getArgsHint = (name) => {
+    const hints = {
+      "ai": "[question]",
+      "translate": "[lang] [text]",
+      "pokemon": "[name]",
+      "nasa": "random",
+      "remind": "[time] [message]",
+      "wiki": "[query]",
+      "ban": "[ID]",
+      "unban": "[ID]",
+      "deepimg": "[prompt]",
+      "aria": "[question]",
+      "copilot": "[message]",
+      "quillbot": "[text]",
+      "venice": "[question]",
+      "webpilot": "[query]",
+      "youai": "[question]",
+      "dict": "[word]"
+    };
+    return hints[name] || "";
+  };
+
+  if (input) {
+    let command = commands.get(input);
+    if (!command) {
+      const actualName = global.client.aliases.get(input);
+      if (actualName) command = commands.get(actualName);
+    }
+
+    if (command) {
+      const { name, description, category, cooldown, usePrefix, aliases } = command.config;
+      const msg = `🤖 **COMMAND: ${name.toUpperCase()}**\n━━━━━━━━━━━━━━━━\n📝 **Description:** ${description || "No description."}\n📁 **Category:** ${category}\n⏳ **Cooldown:** ${cooldown || 0}s\n🔧 **Usage:** ${usePrefix ? prefix : ""}${name} ${getArgsHint(name)}\n${aliases && aliases.length > 0 ? `🔗 **Aliases:** ${aliases.join(", ")}` : ""}\n━━━━━━━━━━━━━━━━`;
+      
+      const buttons = [{ type: "postback", title: "⬅️ Back", payload: "help" }];
+      return api.sendButton(msg, buttons, senderID);
+    }
+  }
+
   const categories = {};
-
-  // 1. Organize commands into categories
   commands.forEach((cmd) => {
-      const cat = cmd.config.category || "General";
-      // Skip showing Admin category to non-admins entirely
-      if (cat.toLowerCase() === "admin" && !isAdmin) return;
-      
-      if (!categories[cat]) categories[cat] = [];
-      categories[cat].push(cmd.config.name);
+    const cat = cmd.config.category || "General";
+    if (cat.toLowerCase() === "admin" && !isAdmin) return;
+    if (!categories[cat]) categories[cat] = [];
+    categories[cat].push(cmd.config.name);
   });
 
-  const targetCategory = args[0] ? args[0].toLowerCase() : null;
-
-  // --- SUB-MENU (When user clicks a category or types "help ai") ---
-  if (targetCategory) {
-      const catName = Object.keys(categories).find(c => c.toLowerCase() === targetCategory);
-      
-      if (catName) {
-          const cmds = categories[catName].map(name => `• ${name}`).join("\n");
-          const msg = `📂 **Category: ${catName}**\n━━━━━━━━━━━━━━━━\n${cmds}\n━━━━━━━━━━━━━━━━\n💡 *Tip: Just type the command name to use it!*`;
-          
-          const buttons = [{ type: "postback", title: "⬅️ Main Menu", payload: "help" }];
-          return api.sendButton(msg, buttons, senderID);
-      }
+  if (input && Object.keys(categories).some(c => c.toLowerCase() === input)) {
+    const catName = Object.keys(categories).find(c => c.toLowerCase() === input);
+    const cmds = categories[catName].sort().map(name => `• ${name}`).join("\n");
+    const msg = `📂 **CATEGORY: ${catName}**\n━━━━━━━━━━━━━━━━\n${cmds}\n━━━━━━━━━━━━━━━━\n💡 *Type "help <command>" for usage info.*`;
+    const buttons = [{ type: "postback", title: "⬅️ Menu", payload: "help" }];
+    return api.sendButton(msg, buttons, senderID);
   }
 
-  // --- MAIN MENU ---
-  let msg = `🤖 **Amdusbot Assistant**\n━━━━━━━━━━━━━━━━\nSelect a command category below to explore my features:\n`;
-  
+  let msg = `🤖 **AMDUSBOT MENU**\n━━━━━━━━━━━━━━━━\n`;
   const buttons = [];
-  const sortedCategories = Object.keys(categories).sort();
+  const sortedCats = Object.keys(categories).sort();
 
-  sortedCategories.forEach(cat => {
-      msg += `\n📁 **${cat}** (${categories[cat].length} commands)`;
-      
-      // 2. Button Logic: Only show buttons for non-Admin categories
-      // And stay within the Facebook 3-button limit
-      if (cat.toLowerCase() !== "admin" && buttons.length < 3) {
-          buttons.push({
-              type: "postback",
-              title: `Explore ${cat}`,
-              payload: `help ${cat}`
-          });
-      }
+  sortedCats.forEach(cat => {
+    msg += `📁 **${cat}**: ${categories[cat].length} commands\n`;
+    if (buttons.length < 3 && cat.toLowerCase() !== "admin") {
+      buttons.push({ type: "postback", title: `Explore ${cat}`, payload: `help ${cat}` });
+    }
   });
 
-  msg += `\n\n━━━━━━━━━━━━━━━━\n💬 *Or type "help [category]" (e.g., help ai)*`;
-
-  // If user is Admin, remind them of the secret category since there is no button for it
-  if (isAdmin && categories["Admin"]) {
-      msg += `\n\n🛡️ **Admin Tools:** type "help admin"`;
-  }
-
+  msg += `\n━━━━━━━━━━━━━━━━\n💡 *Type "help <command>" to see how to use it.*`;
   await api.sendButton(msg, buttons, senderID);
 };
