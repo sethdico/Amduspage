@@ -8,7 +8,7 @@ module.exports.config = {
   name: "admin",
   aliases: ["ban", "unban"],
   author: "Sethdico",
-  version: "1.2",
+  version: "1.3-Fixed",
   category: "Admin",
   description: "Manage users (ban/unban)",
   adminOnly: true,
@@ -16,24 +16,27 @@ module.exports.config = {
   cooldown: 0,
 };
 
-module.exports.run = async function ({ event, args }) {
+module.exports.run = async function ({ event, args, api }) {
   const senderID = event.sender.id;
   const messageText = event.message.text.toLowerCase();
 
-  // Ensure only real admins can use this
-  if (!config.ADMINS.includes(senderID)) {
+  // ✅ Fixed: Check both ADMIN and ADMINS
+  const adminList = config.ADMINS || config.ADMIN || [];
+  if (!adminList.includes(senderID)) {
     return api.sendMessage("❌ Restricted: Admin access only.", senderID);
   }
 
-  // Auto-create banned.json if missing
-  if (!fs.existsSync(bannedPath)) fs.writeFileSync(bannedPath, "[]");
+  if (!fs.existsSync(bannedPath)) {
+    fs.writeFileSync(bannedPath, "[]");
+  }
   let bannedUsers = JSON.parse(fs.readFileSync(bannedPath));
 
-  // Handle "ban" command
   if (messageText.startsWith("ban")) {
-    const target = args[0]; // If using alias 'ban', the ID is the first arg
+    const target = args[0];
     if (!target) return api.sendMessage("⚠️ Usage: ban <ID>", senderID);
-    if (config.ADMINS.includes(target)) return api.sendMessage("❌ You cannot ban an admin.", senderID);
+    if (adminList.includes(target)) {
+      return api.sendMessage("❌ You cannot ban an admin.", senderID);
+    }
 
     if (!bannedUsers.includes(target)) {
       bannedUsers.push(target);
@@ -43,7 +46,6 @@ module.exports.run = async function ({ event, args }) {
       api.sendMessage("ℹ️ User is already banned.", senderID);
     }
   } else if (messageText.startsWith("unban")) {
-    // Handle "unban" command
     const target = args[0];
     if (!target) return api.sendMessage("⚠️ Usage: unban <ID>", senderID);
 
@@ -56,7 +58,6 @@ module.exports.run = async function ({ event, args }) {
       api.sendMessage("⚠️ User is not in the ban list.", senderID);
     }
   } else if (args[0] === "list") {
-    // Handle "admin list"
     api.sendMessage(
       `🚫 **Banned List:**\n${bannedUsers.join("\n") || "No banned users."}`,
       senderID
