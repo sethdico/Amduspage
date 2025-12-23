@@ -7,6 +7,7 @@ const fs = require("fs");
 const app = express();
 
 const cacheDir = path.join(__dirname, "modules/scripts/commands/cache");
+const bannedPath = path.join(__dirname, "modules/scripts/commands/banned.json");
 
 // --- 🧹 STARTUP CLEANER ---
 if (!fs.existsSync(cacheDir)) {
@@ -19,11 +20,29 @@ if (!fs.existsSync(cacheDir)) {
     console.log("🧹 SYSTEM: Cache cleared on startup.");
 }
 
+// --- 🚫 LOAD BANNED USERS (O(1) Optimization) ---
+// We load this once into memory so we don't read the file on every message
+global.BANNED_USERS = new Set();
+try {
+    if (fs.existsSync(bannedPath)) {
+        const rawData = fs.readFileSync(bannedPath, "utf-8");
+        const bannedArray = JSON.parse(rawData);
+        if (Array.isArray(bannedArray)) {
+            global.BANNED_USERS = new Set(bannedArray);
+        }
+    }
+    console.log(`🚫 Loaded ${global.BANNED_USERS.size} banned users.`);
+} catch (e) {
+    console.error("⚠️ Failed to load ban list:", e.message);
+    // Create file if not exists to prevent future errors
+    if (!fs.existsSync(bannedPath)) fs.writeFileSync(bannedPath, "[]");
+}
+
 // --- 🚀 GLOBAL COMMAND LOADER ---
 global.client = {
     commands: new Map(),
     aliases: new Map(),
-    cooldowns: new Map() // ✅ Added cooldown tracking
+    cooldowns: new Map()
 };
 
 const commandsPath = path.join(__dirname, "modules/scripts/commands");
@@ -68,12 +87,11 @@ app.post("/webhook", (req, res) => {
     res.sendStatus(200);
 });
 
-// --- 🚨 GLOBAL ERROR HANDLER (Fixed) ---
+// --- 🚨 GLOBAL ERROR HANDLER ---
 app.use((err, req, res, next) => {
   console.error("🔥 Critical Server Error:", err.stack);
   res.status(500).send("Internal Server Error");
   
-  // ✅ Log to file for debugging
   const errorLog = `[${new Date().toISOString()}] ${err.stack}\n`;
   fs.appendFile(path.join(__dirname, "error.log"), errorLog, () => {});
 });
