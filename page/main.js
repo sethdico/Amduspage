@@ -2,18 +2,23 @@ module.exports = async function (event) {
   const config = require("../config.json");
   const api = {};
   
-  // LOAD ALL API SCRIPTS
+  // REGISTER ALL SCRIPTS
   const scripts = [
     "markAsSeen",
     "sendMessage",
     "sendTypingIndicator",
     "setMessageReaction",
     "sendAttachment",
-    "sendButton"
+    "sendButton",
+    // NEW ONES:
+    "sendQuickReply",
+    "sendCarousel",
+    "getUserInfo"
   ];
 
   for (const scriptName of scripts) {
     try {
+      // Standardize loading
       const loadedScript = require(`./src/${scriptName}`);
       if (typeof loadedScript === "function") {
         api[scriptName] = loadedScript(event);
