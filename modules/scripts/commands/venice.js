@@ -2,40 +2,39 @@ const axios = require("axios");
 
 module.exports.config = {
     name: "venice",
-    author: "Sethdico (Ported)",
-    version: "1.0",
+    author: "Sethdico",
+    version: "1.5-Lite",
     category: "AI",
-    description: "Venice AI",
+    description: "Venice AI (Uncensored-style model).",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
 };
 
-module.exports.run = async function ({ event, args }) {
+module.exports.run = async function ({ event, args, api }) {
     const question = args.join(" ");
-    if (!question) return api.sendMessage("⚠️ Usage: venice <question>", event.sender.id);
+    if (!question) return api.sendMessage("🎭 Usage: venice <question>", event.sender.id);
 
-    api.sendTypingIndicator(true, event.sender.id);
+    if (api.sendTypingIndicator) api.sendTypingIndicator(true, event.sender.id).catch(()=>{});
 
     try {
         const response = await axios.get("https://shin-apis.onrender.com/ai/venice", {
             params: { 
                 question: question,
-                systemPrompt: "You are a helpful AI."
-            }
+                // Add a timestamp to prevent caching on the API side
+                _: Date.now() 
+            },
+            timeout: 40000
         });
 
-        const reply = response.data.response || response.data.answer || response.data.result;
+        const reply = response.data.response || response.data.answer;
         
         if (reply) {
-            const msg = `🤖 **Venice AI**\n━━━━━━━━━━━━━━━━\n${reply}`;
-            api.sendMessage(msg, event.sender.id);
+            api.sendMessage(`🎭 **Venice AI**\n━━━━━━━━━━━━━━━━\n${reply}`, event.sender.id);
         } else {
-            api.sendMessage("❌ Empty response.", event.sender.id);
+            throw new Error("Empty response");
         }
     } catch (e) {
-        api.sendMessage("❌ Error connecting to Venice.", event.sender.id);
-    } finally {
-        api.sendTypingIndicator(false, event.sender.id);
+        api.sendMessage("❌ Venice is silent right now.", event.sender.id);
     }
 };
