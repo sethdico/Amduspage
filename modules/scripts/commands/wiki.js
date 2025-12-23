@@ -1,17 +1,19 @@
 const axios = require("axios");
 
-// Cache Map (O(1))
-const wikiCache = new Map();
-const CACHE_TTL = 3600000; // 1 Hour
+// Your Wikimedia API Token
+const WIKI_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiJkOGY5M2FhZjZkYmRiNjBhODE4OTBmMzJhM2UyNTNmOSIsImp0aSI6ImZjZTRiZWI4OTk1ZTFjNTc1ZTVmNTQyMDc5YmE4ZTBmM2Q0OWYyMGU0M2EwNzFjZjhkNTQ5YzJhMDIyNTc4ZWM2NmNjMjFhNzJkNzY1ZDZmIiwiaWF0IjoxNzY2MzMyNDQ0LjQ1NjI1OCwibmJmIjoxNzY2MzMyNDQ0LjQ1NjI2LCJleHAiOjMzMzIzMjQxMjQ0LjQ1NDI1LCJzdWIiOiI4MTMyOTU5MyIsImlzcyI6Imh0dHBzOi8vbWV0YS53aWtpbWVkaWEub3JnIiwicmF0ZWxpbWl0Ijp7InJlcXVlc3RzX3Blcl91bml0Ijo1MDAwLCJ1bml0IjoiSE9VUiJ9LCJzY29wZXMiOlsiYmFzaWMiXX0.WCtJZjuU9uannqn8T-z5xXNpm8s89OCJXoX5aRjf4eJf40zFXUzznHYB1jVOZNe0BD0NvZwxYZ354I1E7Ph8KrPtT7FJcTDjlP1dGP_UVI8mb_IK3pv4pOd8rjTOoJMpsdPg_6zINAVshsX0KuSMwABRb6fUWkapAgfiidHK1tZktYanSIKVKJPcmFoDwo4NC3MI_Fed41A35WoFnEuKHTKYzjMlTKPn5aepoHgYqR-r0UCe4Dnu6Mqd-Z4yZstS-CbQxiGfGayzBFIIRgqHNa47x4AGj2e3Wp6DKJ7Ym78d8pyBpMS-D9lKT0LtLxPaJ2kbQ0t1dn2jcAmwekSWasNR-_cU3Kk4nhCmxtQxBDgH-BzGzNGSAAkEB_7M3SfBQCj-dLeFlO6xi6PdapQH0F-a6AUm8PM_3xLm-XdFqEcsgwKz6kakEvaE6_7w4nqkK8c05MUJEOTSmD3QT0ejl8xCo1U8HtHkALwZxf5r6OBmhkaUuv7eUOHBVdCMolZi9SQhXUoD_8PUPVPJO1CqzxmKTQWB_GFrEyKHp0P5Wl_WIAB7dU999DK1ic_mRz9nM_tcuFY53vAyryTq6vIPVgpK027Mzb7Lk2hABQnPO0YXcxO177bV4CfurP6Ut6fJXjx4zk5dyzFPytrqNApFbK08GFPeyqyGYycjz_qVcBY";
 
-const HEADERS = { 'User-Agent': 'Amdusbot/4.0' };
+const HEADERS = {
+    'Authorization': `Bearer ${WIKI_TOKEN}`,
+    'User-Agent': 'Amdusbot/5.0 (https://github.com/sethdico/my-pagebot)'
+};
 
 module.exports.config = {
     name: "wiki",
-    author: "Sethdico (Carousel-Mode)",
-    version: "4.5",
+    author: "Sethdico",
+    version: "5.0",
     category: "Utility",
-    description: "Wikipedia.",
+    description: "Wikipedia search with API Token.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -19,84 +21,48 @@ module.exports.config = {
 
 module.exports.run = async function ({ event, args, api }) {
     const senderID = event.sender.id;
-    let query = args.join(" ").trim();
-    let lang = "en";
-
-    // Language switch
-    if (args[0]?.length === 2 && args.length > 1) {
-        if (/^[a-z]{2}$/.test(args[0])) {
-            lang = args[0].toLowerCase();
-            query = args.slice(1).join(" ");
-        }
-    }
-
+    const query = args.join(" ").trim();
     if (!query) return api.sendMessage("🔍 Usage: wiki <topic>", senderID);
-    if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID).catch(()=>{});
 
-    // Check Cache
-    const cacheKey = `${lang}_${query.toLowerCase()}`;
-    if (wikiCache.has(cacheKey)) {
-        const cached = wikiCache.get(cacheKey);
-        if (Date.now() - cached.timestamp < CACHE_TTL) {
-            return api.sendCarousel(cached.elements, senderID);
-        }
-    }
+    if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID).catch(() => {});
 
     try {
-        // 1. Smart Search (OpenSearch) to get correct title
-        const searchRes = await axios.get(`https://${lang}.wikipedia.org/w/api.php`, {
-            params: { action: "opensearch", search: query, limit: 1, namespace: 0, format: "json" }
+        // 1. Search for titles using the token
+        const search = await axios.get(`https://en.wikipedia.org/w/api.php`, {
+            params: { action: "opensearch", search: query, limit: 5, format: "json" },
+            headers: HEADERS
         });
 
-        if (!searchRes.data[1]?.length) return api.sendMessage(`❌ No results for "${query}".`, senderID);
-        const correctTitle = searchRes.data[1][0];
+        if (!search.data[1]?.length) return api.sendMessage(`❌ No results found for "${query}".`, senderID);
 
-        // 2. Fetch Summary (Main Card)
-        const summaryUrl = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(correctTitle)}`;
-        const summaryRes = await axios.get(summaryUrl, { headers: HEADERS });
-        const mainData = summaryRes.data;
-
-        // 3. Fetch Related Pages (Next Cards)
-        const relatedUrl = `https://${lang}.wikipedia.org/api/rest_v1/page/related/${encodeURIComponent(correctTitle)}`;
-        let relatedData = [];
-        try {
-            const relRes = await axios.get(relatedUrl, { headers: HEADERS, timeout: 3000 });
-            relatedData = relRes.data.pages || [];
-        } catch (e) { /* Ignore related fail */ }
-
-        // 4. Build Carousel Elements
+        const titles = search.data[1];
         const elements = [];
 
-        // Add Main Card
-        elements.push({
-            title: mainData.title,
-            subtitle: mainData.extract ? mainData.extract.substring(0, 80) + "..." : "Read article...",
-            image_url: mainData.originalimage?.source || mainData.thumbnail?.source || "https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Wikipedia-logo-v2.svg/1200px-Wikipedia-logo-v2.svg.png",
-            buttons: [{ type: "web_url", url: mainData.content_urls.desktop.page, title: "📖 Read" }]
-        });
+        // 2. Fetch summaries for the titles
+        const requests = titles.map(title => 
+            axios.get(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`, { headers: HEADERS }).catch(() => null)
+        );
+        
+        const summaries = await Promise.all(requests);
 
-        // Add up to 4 Related Cards
-        relatedData.slice(0, 4).forEach(page => {
+        summaries.forEach(res => {
+            if (!res || !res.data) return;
+            const data = res.data;
             elements.push({
-                title: page.title,
-                subtitle: page.extract ? page.extract.substring(0, 80) + "..." : "Related topic",
-                image_url: page.originalimage?.source || page.thumbnail?.source || "https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Wikipedia-logo-v2.svg/1200px-Wikipedia-logo-v2.svg.png",
-                buttons: [{ type: "web_url", url: page.content_urls.desktop.page, title: "📖 Read" }]
+                title: data.title,
+                subtitle: data.extract ? data.extract.substring(0, 80) + "..." : "Tap to read more.",
+                image_url: data.thumbnail?.source || data.originalimage?.source || "https://upload.wikimedia.org/wikipedia/commons/6/63/Wikipedia-logo-en-big.png",
+                buttons: [{ type: "web_url", url: data.content_urls.desktop.page, title: "📖 Read More" }]
             });
         });
 
-        // Save Cache
-        wikiCache.set(cacheKey, { elements, timestamp: Date.now() });
-
-        // Send
         if (api.sendCarousel && elements.length > 0) {
             await api.sendCarousel(elements, senderID);
         } else {
-            api.sendMessage(`📚 **${mainData.title}**\n${mainData.extract}`, senderID);
+            api.sendMessage(`📚 **${elements[0].title}**\n\n${elements[0].subtitle}`, senderID);
         }
-
     } catch (e) {
-        console.error("Wiki error:", e.message);
-        api.sendMessage("❌ Wiki lookup failed.", senderID);
+        console.error("Wiki Error:", e.message);
+        api.sendMessage("❌ Wiki lookup failed. Please check API Token.", senderID);
     }
 };
