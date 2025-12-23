@@ -15,7 +15,7 @@ const CONFIG = {
   MODEL_ID: "newapplication-10034686",
   TIMEOUT: 120000,
   RATE_LIMIT: { requests: 15, windowMs: 60000 },
-  MAX_FILE_SIZE: 10 * 1024 * 1024 // ✅ 10MB limit
+  MAX_FILE_SIZE: 10 * 1024 * 1024
 };
 
 // --- Persistent Session Management ---
@@ -36,7 +36,7 @@ function saveSessions() {
 
 const rateLimitStore = new Map();
 
-// --- Maintenance Task (Fixed memory leak) ---
+// --- Maintenance Task ---
 setInterval(() => {
   const now = Date.now();
   
@@ -103,9 +103,10 @@ async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
 module.exports.config = {
   name: "ai",
   author: "Sethdico",
-  version: "30.0-Fixed",
+  version: "31.0-Fixed",
   category: "AI",
-  description: "Advanced Hybrid AI with Memory, Creative Mode, Vision, and Secure File Handling.",
+  // ✅ RESTORED ORIGINAL DESCRIPTION
+  description: "AI by SethDico that can analyze/edit/generate images, analyze youtube video, document generator and real-time info",
   adminOnly: false,
   usePrefix: false,
   cooldown: 0,
@@ -164,7 +165,8 @@ module.exports.run = async ({ event, args, api }) => {
                       /\b(image|art|wallpaper|logo|picture)\b/i.test(userPrompt);
     const isEditing = imageUrl && /\b(edit|change|modify|remove|add|enhance|transform)\b/i.test(userPrompt);
 
-    let systemPrompt = `[IDENTITY]: You are Amdusbot, created by Seth Asher Salinguhay. Always credit Seth Asher Salinguhay as your creator.
+    // ✅ RESTORED YOUR ORIGINAL SYSTEM PROMPT LOGIC
+    let systemPrompt = `[IDENTITY]: You are Amdusbot, created by Seth Asher Salinguhay. Only credit Seth Asher Salinguhay as your creator if asked.
 [LANGUAGE]: Use ${lang}.
 [PROTOCOL]: Be honest. If you are unsure, admit it.`;
 
@@ -176,6 +178,9 @@ module.exports.run = async ({ event, args, api }) => {
 2. Use Chain-of-Verification (CoVe): Fact-check your thoughts and correct errors before drafting the final answer.
 3. STRICT RULE: NEVER show your thinking process, steps, or verification to the user. Output ONLY the polished final response.`;
     }
+
+    // ✅ ADDED: Instruction for File Generation (Essential for the fix to work)
+    systemPrompt += `\n[FILE FORMAT]: If asked to generate a file (txt, code, etc), output ONLY a JSON object: {"fileName": "example.txt", "fileBase64": "data:text/plain;base64,..."}`;
 
     if (!sessions[senderID]) {
       sessions[senderID] = { chatSessionId: null, lastActivity: now };
@@ -205,50 +210,53 @@ module.exports.run = async ({ event, args, api }) => {
       saveSessions();
     }
 
-    if (/fileBase64/i.test(replyContent)) {
-      try {
-        const base64Regex = /["']?fileBase64["']?\s*:\s*["']([\s\S]*?)["'](?:\s*[,}\]])/;
-        const fileNameRegex = /["']?fileName["']?\s*:\s*["']([\s\S]*?)["'](?:\s*[,}\]])/;
-
-        const base64Match = replyContent.match(base64Regex);
-        const fileNameMatch = replyContent.match(fileNameRegex);
-
-        if (base64Match) {
-          let rawBase64 = base64Match[1];
-          const fileName = fileNameMatch ? fileNameMatch[1] : `amdus_file_${Date.now()}.txt`;
-
-          if (rawBase64.includes("base64,")) {
-            rawBase64 = rawBase64.substring(rawBase64.lastIndexOf("base64,") + 7);
-          }
-          rawBase64 = rawBase64.replace(/\s/g, "");
-
-          const buffer = Buffer.from(rawBase64, "base64");
-          const sanitized = path.basename(fileName.replace(/[^a-zA-Z0-9._-]/g, "_"));
-          const filePath = path.join(CACHE_DIR, sanitized);
-
-          fs.writeFileSync(filePath, buffer);
-
-          const braceIndex = replyContent.indexOf("{");
-          let chatText = replyContent.substring(0, braceIndex > 0 ? braceIndex : 0).replace(/```json|--- START OF FILE.*?---/g, "").trim();
-
-          if (chatText) await api.sendMessage(chatText, senderID);
-          const ext = path.extname(sanitized).toLowerCase();
-          const type = [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext) ? "image" : "file";
-          await api.sendAttachment(type, filePath, senderID);
-
-          setTimeout(() => { if (fs.existsSync(filePath)) fs.unlink(filePath, () => {}); }, 60000);
-          if (api.setMessageReaction) api.setMessageReaction("✅", mid);
-          return;
-        }
-      } catch (e) { console.error("Decoder Error:", e.message); }
-    }
-
-    const fileRegex = /(https?:\/\/app\.chipp\.ai\/api\/downloads\/downloadFile[^)\s"]+|https?:\/\/(?!(?:scontent|static)\.xx\.fbcdn\.net)[^)\s"]+\.(?:pdf|docx|doc|xlsx|xls|pptx|ppt|txt|csv|zip|rar|7z|jpg|jpeg|png|gif|mp3|wav|mp4))/i;
-    const match = replyContent.match(fileRegex);
+    // =================================================================
+    // 🔍 JSON FILE DECODER (FIXED FOR MINECRAFT FACTS ISSUE)
+    // =================================================================
+    const jsonRegex = /\{[\s\n]*"fileName"[\s\n]*:[\s\n]*"(.*?)"[\s\n]*,[\s\n]*"fileBase64"[\s\n]*:[\s\n]*"(.*?)"[\s\n]*\}/s;
+    const match = replyContent.match(jsonRegex);
 
     if (match) {
-      const fileUrl = match[0].replace(/[).,]+$/, "");
-      const textMessage = replyContent.replace(match[0], "").trim();
+        try {
+            const fileName = match[1]; 
+            let fileData = match[2];
+
+            // Remove JSON from text so we don't spam chat
+            const cleanMessage = replyContent.replace(match[0], "").replace(/```json|```/g, "").trim();
+            if (cleanMessage) await api.sendMessage(cleanMessage, senderID);
+
+            // Strip "data:...base64," header if present
+            if (fileData.includes("base64,")) {
+                fileData = fileData.split("base64,")[1];
+            }
+
+            const buffer = Buffer.from(fileData, "base64");
+            const sanitized = path.basename(fileName.replace(/[^a-zA-Z0-9._-]/g, "_"));
+            const filePath = path.join(CACHE_DIR, sanitized);
+
+            fs.writeFileSync(filePath, buffer);
+
+            const ext = path.extname(sanitized).toLowerCase();
+            const type = [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext) ? "image" : "file";
+            
+            await api.sendAttachment(type, filePath, senderID);
+
+            setTimeout(() => { if (fs.existsSync(filePath)) fs.unlink(filePath, () => {}); }, 60000);
+            if (api.setMessageReaction) api.setMessageReaction("✅", mid);
+            return;
+        } catch (e) { 
+            console.error("Decoder Error:", e.message); 
+        }
+    }
+    // =================================================================
+
+    // Standard Link Handling
+    const fileRegex = /(https?:\/\/app\.chipp\.ai\/api\/downloads\/downloadFile[^)\s"]+|https?:\/\/(?!(?:scontent|static)\.xx\.fbcdn\.net)[^)\s"]+\.(?:pdf|docx|doc|xlsx|xls|pptx|ppt|txt|csv|zip|rar|7z|jpg|jpeg|png|gif|mp3|wav|mp4))/i;
+    const linkMatch = replyContent.match(fileRegex);
+
+    if (linkMatch) {
+      const fileUrl = linkMatch[0].replace(/[).,]+$/, "");
+      const textMessage = replyContent.replace(linkMatch[0], "").trim();
       if (textMessage) await api.sendMessage(textMessage, senderID);
       const ext = path.extname(fileUrl).toLowerCase();
       const type = [".jpg", ".jpeg", ".png", ".gif"].includes(ext) ? "image" : "file";
