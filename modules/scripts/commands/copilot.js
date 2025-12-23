@@ -1,19 +1,14 @@
 const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
 
-const SESSION_FILE = path.join(__dirname, "copilot_sessions.json");
-let sessions = {};
-try { if (fs.existsSync(SESSION_FILE)) sessions = JSON.parse(fs.readFileSync(SESSION_FILE, "utf-8")); } catch (e) { sessions = {}; }
-
-function save() { fs.writeFileSync(SESSION_FILE, JSON.stringify(sessions, null, 2)); }
+// === MEMORY STORAGE ===
+const copilotHistory = new Map();
 
 module.exports.config = {
   name: "copilot",
-  author: "Sethdico",
-  version: "4.0-Standalone",
+  author: "Sethdico (Memory-Fixed)",
+  version: "4.6-Contextual",
   category: "AI",
-  description: "Microsoft Copilot with standalone modes and vision.",
+  description: "Microsoft Copilot with local memory injection.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 5,
@@ -22,48 +17,79 @@ module.exports.config = {
 module.exports.run = async ({ event, args, api }) => {
   const senderID = event.sender.id;
 
-  if (args[0]?.toLowerCase() === "clear") {
-    delete sessions[senderID];
-    save();
-    return api.sendMessage("🧹 Copilot memory cleared!", senderID);
-  }
+  // 1. HANDLE MODEL & INPUT
+  const validModels = ["precise", "creative", "balanced"];
+  let model = "balanced"; 
+  let input = args.join(" ");
 
-  const validModels = ["default", "think-deeper", "gpt-5"];
-  let model = "default";
-  let message = args.join(" ");
-
+  // Check if first word is a model name
   if (validModels.includes(args[0]?.toLowerCase())) {
     model = args[0].toLowerCase();
-    message = args.slice(1).join(" ");
+    input = args.slice(1).join(" ");
   }
 
-  if (!message) return api.sendMessage("⚠️ Usage: copilot [model] <message>\nModels: default, think-deeper, gpt-5", senderID);
+  // 2. CLEAR MEMORY
+  if (input.toLowerCase() === "clear" || args[0]?.toLowerCase() === "clear") {
+    copilotHistory.delete(senderID);
+    return api.sendMessage("🧹 Copilot context cleared.", senderID);
+  }
 
+  if (!input) return api.sendMessage("💠 Usage: copilot <text>\nOr: copilot creative <text>", senderID);
+
+  // 3. IMAGE DETECTION
   let imageUrl = "";
   if (event.message?.attachments?.[0]?.type === "image") {
     imageUrl = event.message.attachments[0].payload.url;
+  } else if (event.message?.reply_to?.attachments?.[0]?.type === "image") {
+    imageUrl = event.message.reply_to.attachments[0].payload.url;
   }
 
-  if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
+  if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID).catch(()=>{});
 
   try {
+    // 4. PREPARE MEMORY STITCHING
+    let history = copilotHistory.get(senderID) || [];
+    
+    // Format history: "User: Hi \n Copilot: Hello"
+    const contextString = history
+        .slice(-3) // Last 3 turns
+        .map(h => `Human: ${h.user}\nCopilot: ${h.bot}`)
+        .join("\n");
+
+    let finalPrompt = input;
+    
+    // Only inject history if no image (Images usually reset context in these APIs)
+    if (contextString && !imageUrl) {
+        finalPrompt = `Context:\n${contextString}\n\nHuman: ${input}`;
+    }
+
+    // 5. API REQUEST
     const res = await axios.get("https://shin-apis.onrender.com/ai/copilot", {
-      params: { message, model, imageurl: imageUrl },
-      timeout: 90000
+      params: { 
+          q: finalPrompt, 
+          model: model, 
+          url: imageUrl 
+      },
+      timeout: 60000
     });
 
-    const reply = res.data.response || res.data.answer || "❌ No response.";
-    const msg = `💡 **Copilot [${model.toUpperCase()}]**\n───────────────\n${reply}`;
+    const reply = res.data.response || res.data.answer || res.data.result;
     
-    await api.sendMessage(msg, senderID);
+    if (!reply) throw new Error("No response");
 
-    if (!sessions[senderID]) sessions[senderID] = [];
-    sessions[senderID].push({ role: "user", content: message });
-    save();
+    // 6. SAVE MEMORY
+    history.push({ user: input, bot: reply });
+    if (history.length > 6) history.shift();
+    copilotHistory.set(senderID, history);
+
+    // 7. SEND
+    const header = `💠 **Copilot [${model.toUpperCase()}]**`;
+    await api.sendMessage(`${header}\n━━━━━━━━━━━━━━━━\n${reply}`, senderID);
 
   } catch (e) {
-    api.sendMessage("❌ Copilot error. Try again later.", senderID);
+    console.error("Copilot Error:", e.message);
+    api.sendMessage("❌ Copilot is unreachable.", senderID);
   } finally {
-    if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
+    if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID).catch(()=>{});
   }
 };
