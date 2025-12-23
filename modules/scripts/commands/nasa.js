@@ -1,78 +1,75 @@
 const axios = require("axios");
+
+// === IN-MEMORY CACHE ===
+let apodCache = { data: null, timestamp: 0 };
+const CACHE_DURATION = 4 * 60 * 60 * 1000; // Cache for 4 hours (safe update window)
+
 module.exports.config = {
   name: "nasa",
-  author: "Sethdico",
-  version: "2.0",
+  author: "Sethdico (Optimized)",
+  version: "3.0-Cached",
   category: "Fun",
-  description: "View NASA's Astronomy Picture of the Day, search by date, or get random images.",
+  description: "NASA APOD with 24h caching for speed.",
   adminOnly: false,
   usePrefix: false,
-  cooldown: 5,
+  cooldown: 2,
 };
+
 module.exports.run = async ({ event, args, api }) => {
   const senderID = event.sender.id;
-  const NASA_API_KEY = "CXbr4ovi6dMLNxbV9XfgBxyskEMbt1Mti7YmXx50";
-const isRandom = args[0]?.toLowerCase() === "random";
-  const isDateSearch = args[0] && /^\d{4}-\d{2}-\d{2}$/.test(args[0]);
+  const isRandom = args[0]?.toLowerCase() === "random";
+  const dateQuery = args[0] && /^\d{4}-\d{2}-\d{2}$/.test(args[0]) ? args[0] : null;
 
-  let apiUrl = `https://api.nasa.gov/planetary/apod?api_key=${NASA_API_KEY}`;
-if (isRandom) {
-    apiUrl += "&count=1";
-  } else if (isDateSearch) {
-    apiUrl += `&date=${args[0]}`;
-}
-
-  if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
+  // Fire-and-forget typing indicator
+  if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID).catch(() => {});
 
   try {
-    const response = await axios.get(apiUrl, { timeout: 15000 });
-let data = response.data;
+    let data;
 
-    if (Array.isArray(data)) data = data[0];
-
-    const title = data.title || "NASA Astronomy Picture";
-const date = data.date;
-    const explanation = data.explanation || "No description provided.";
-    const mediaType = data.media_type;
-const hdUrl = data.hdurl || data.url;
-    const copyright = data.copyright ? `\n📸 **Copyright:** ${data.copyright}` : "";
-let msg = `🌌 **NASA: ${title.toUpperCase()}**\n━━━━━━━━━━━━━━━━\n📅 **Date:** ${date}${copyright}\n📝 **Explanation:** ${explanation.length > 500 ? explanation.substring(0, 500) + "..." : explanation}\n━━━━━━━━━━━━━━━━`;
-if (mediaType === "image") {
-      await api.sendAttachment("image", hdUrl, senderID);
-} else if (mediaType === "video") {
-      msg += `\n\n🎥 **Video Link:** ${hdUrl}`;
-}
-
-    const buttons = [
-      {
-        type: "postback",
-        title: "🎲 Random",
-        payload: "nasa random",
-      },
-      {
-        type: "web_url",
-        url: hdUrl,
-        title: "🖼️ High-Res",
-      },
-      {
+    // 1. CHECK CACHE (If asking for today's picture)
+    const now = Date.now();
+    if (!isRandom && !dateQuery && apodCache.data && (now - apodCache.timestamp < CACHE_DURATION)) {
+      console.log("🚀 Serving NASA APOD from Cache");
+      data = apodCache.data;
+    } else {
+      // 2. FETCH FROM API
+      const apiKey = "DEMO_KEY"; // Or your specific key
+      let url = `https://api.nasa.gov/planetary/apod?api_key=${apiKey}`;
       
-  type: "web_url",
-        url: "https://apod.nasa.gov/apod/archivepix.html",
-        title: "📚 Archive",
-      },
-    ];
-await api.sendButton(msg, buttons, senderID);
+      if (isRandom) url += "&count=1";
+      if (dateQuery) url += `&date=${dateQuery}`;
+
+      const res = await axios.get(url, { timeout: 10000 });
+      data = Array.isArray(res.data) ? res.data[0] : res.data;
+
+      // Update Cache if it's the standard daily request
+      if (!isRandom && !dateQuery) {
+        apodCache = { data, timestamp: now };
+      }
+    }
+
+    // 3. FORMAT MESSAGE
+    const title = data.title || "Space Image";
+    const date = data.date || "Unknown Date";
+    const copyright = data.copyright ? `\n📸 © ${data.copyright}` : "";
+    const description = data.explanation 
+      ? (data.explanation.length > 300 ? data.explanation.substring(0, 300) + "..." : data.explanation)
+      : "No description.";
+
+    const msg = `🌌 **${title.toUpperCase()}**\n━━━━━━━━━━━━━━━━\n📅 ${date}${copyright}\n\n${description}`;
+
+    // 4. SEND (Handle Video vs Image)
+    if (data.media_type === "video") {
+      await api.sendMessage(`${msg}\n\n🎥 **Watch:** ${data.url}`, senderID);
+    } else {
+      await api.sendAttachment("image", data.hdurl || data.url, senderID);
+      await api.sendMessage(msg, senderID); // Send text separately to ensure image loads first/cleaner
+    }
+
   } catch (error) {
-    console.error("NASA API Error:", error.message);
-if (error.response?.status === 400) {
-      api.sendMessage(
-        "❌ Invalid date. Use format: nasa YYYY-MM-DD (e.g., nasa 2024-12-25)\nOr try: nasa random",
-        senderID,
-      );
-} else {
-      api.sendMessage("❌ Error connecting to NASA. Try again later!", senderID);
-}
+    console.error("NASA Error:", error.message);
+    api.sendMessage("❌ Failed to contact NASA. Try 'nasa random'.", senderID);
   } finally {
-    if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
+    if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID).catch(() => {});
   }
 };
