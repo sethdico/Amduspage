@@ -30,9 +30,9 @@ async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
 module.exports.config = {
   name: "ai",
   author: "Sethdico",
-  version: "16.7-Fix",
+  version: "16.8-FinalFix",
   category: "AI",
-  description: "Main AI.",
+  description: "Advanced Multi-AI: Vision, Web Search, and Chat.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 0, 
@@ -65,7 +65,7 @@ module.exports.run = async function ({ event, args, api }) {
       return api.sendMessage("🧹 Conversation memory cleared.", senderID); 
   }
   if (isSticker && !userPrompt) return; 
-  if (imageUrl && !userPrompt) return api.sendMessage("🖼️ I see the image! What should I do? reply to the image with the instruction.", senderID);
+  if (imageUrl && !userPrompt) return api.sendMessage("🖼️ I see the image! What should I do?", senderID);
   if (!userPrompt && !imageUrl) return api.sendMessage("👋 Hi! I'm Amdusbot. I can search the web, see images, and write documents.", senderID);
 
   const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
@@ -113,7 +113,8 @@ module.exports.run = async function ({ event, args, api }) {
 
     const replyContent = response.data?.choices?.[0]?.message?.content || "";
 
-    const fileRegex = /(https?:\/\/app\.chipp\.ai\/api\/downloads\/downloadFile[^)\s"]+|https?:\/\/(?!(?:scontent|static)\.xx\.fbcdn\.net)[^)\s"]+\.(?:pdf|docx|doc|xlsx|xls|pptx|ppt|txt|csv|zip|rar|7z|jpg|jpeg|png|gif|mp3|wav|mp4))/i;
+    // 🛡️ UPDATED REGEX: Now catches both chipp.ai and storage.googleapis.com links
+    const fileRegex = /(https?:\/\/[^\s)]+\.(?:pdf|docx|doc|xlsx|xls|pptx|ppt|txt|csv|zip|rar|7z|jpg|jpeg|png|gif|webp|mp3|wav|mp4)(?:\?[^\s)]*)?)/i;
     const match = replyContent.match(fileRegex);
 
     if (match) {
@@ -121,11 +122,19 @@ module.exports.run = async function ({ event, args, api }) {
       const cacheDir = path.join(__dirname, "cache");
       if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
 
-      // Step 1: Detect file info before doing anything
-      let fileName = "file.bin";
+      // 🛠️ IMPROVED FILENAME DETECTION
+      let fileName = "";
       try {
           const urlObj = new URL(fileUrl);
-          fileName = urlObj.searchParams.get("fileName") || `amdus_gen_${Date.now()}.pdf`;
+          // 1. Try Chipp's fileName param
+          fileName = urlObj.searchParams.get("fileName");
+          // 2. Fallback to path basename (important for Google Storage links)
+          if (!fileName) {
+              fileName = path.basename(urlObj.pathname);
+          }
+          // 3. Last fallback
+          if (!fileName || fileName === "/") fileName = `file_${Date.now()}.bin`;
+          
           fileName = decodeURIComponent(fileName).replace(/[^a-zA-Z0-9._-]/g, "_"); 
       } catch (e) { fileName = `file_${Date.now()}.bin`; }
 
@@ -136,12 +145,11 @@ module.exports.run = async function ({ event, args, api }) {
       const textPart = replyContent.replace(match[0], "").trim();
       if (textPart) await api.sendMessage(textPart, senderID);
 
-      // ✅ ONLY send the Base64 instruction if it's strictly a document/file
+      // ✅ STRICT CHECK: Instruction ONLY for non-images
       if (!isImage) {
         await api.sendMessage("the file is in Base64 you either decode it using me via pasting", senderID);
       }
 
-      // Step 3: Download and Send
       const filePath = path.join(cacheDir, fileName);
       const fileWriter = fs.createWriteStream(filePath);
 
@@ -156,15 +164,14 @@ module.exports.run = async function ({ event, args, api }) {
 
           const stats = fs.statSync(filePath);
           if (stats.size > 24 * 1024 * 1024) {
-             await api.sendMessage(`📂 File too large. Link: ${fileUrl}`, senderID);
+             await api.sendMessage(`📂 File too large for direct send. Download: ${fileUrl}`, senderID);
           } else {
              const type = isImage ? "image" : "file";
              await api.sendAttachment(type, filePath, senderID);
           }
       } catch (err) {
-          await api.sendMessage(`📂 Connection error. Link: ${fileUrl}`, senderID);
+          await api.sendMessage(`📂 Connection failed. Link: ${fileUrl}`, senderID);
       } finally {
-          // Cleanup: Delete after 30 seconds to be safe
           setTimeout(() => { 
             if (fs.existsSync(filePath)) {
               try { fs.unlinkSync(filePath); } catch(e) {}
