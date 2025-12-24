@@ -5,10 +5,10 @@ const copilotHistory = new Map();
 
 module.exports.config = {
   name: "copilot",
-  author: "Sethdico (Memory-Fixed)",
-  version: "4.6-Contextual",
+  author: "Sethdico (Fixed)",
+  version: "4.7-Fixed",
   category: "AI",
-  description: "Microsoft Copilot with local memory injection.",
+  description: "Microsoft Copilot with updated API parameters.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 5,
@@ -17,16 +17,10 @@ module.exports.config = {
 module.exports.run = async ({ event, args, api }) => {
   const senderID = event.sender.id;
 
-  // 1. HANDLE MODEL & INPUT
-  const validModels = ["precise", "creative", "balanced"];
-  let model = "balanced"; 
-  let input = args.join(" ");
-
-  // Check if first word is a model name
-  if (validModels.includes(args[0]?.toLowerCase())) {
-    model = args[0].toLowerCase();
-    input = args.slice(1).join(" ");
-  }
+  // 1. HANDLE INPUT
+  // Removing the model selection logic as many of these third-party APIs 
+  // currently only accept the 'message' parameter.
+  const input = args.join(" ").trim();
 
   // 2. CLEAR MEMORY
   if (input.toLowerCase() === "clear" || args[0]?.toLowerCase() === "clear") {
@@ -34,61 +28,56 @@ module.exports.run = async ({ event, args, api }) => {
     return api.sendMessage("🧹 Copilot context cleared.", senderID);
   }
 
-  if (!input) return api.sendMessage("💠 Usage: copilot <text>\nOr: copilot creative <text>", senderID);
-
-  // 3. IMAGE DETECTION
-  let imageUrl = "";
-  if (event.message?.attachments?.[0]?.type === "image") {
-    imageUrl = event.message.attachments[0].payload.url;
-  } else if (event.message?.reply_to?.attachments?.[0]?.type === "image") {
-    imageUrl = event.message.reply_to.attachments[0].payload.url;
-  }
+  if (!input) return api.sendMessage("💠 Usage: copilot <your question>", senderID);
 
   if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID).catch(()=>{});
 
   try {
-    // 4. PREPARE MEMORY STITCHING
+    // 3. PREPARE MEMORY STITCHING
     let history = copilotHistory.get(senderID) || [];
     
-    // Format history: "User: Hi \n Copilot: Hello"
     const contextString = history
-        .slice(-3) // Last 3 turns
+        .slice(-3) 
         .map(h => `Human: ${h.user}\nCopilot: ${h.bot}`)
         .join("\n");
 
     let finalPrompt = input;
-    
-    // Only inject history if no image (Images usually reset context in these APIs)
-    if (contextString && !imageUrl) {
+    if (contextString) {
         finalPrompt = `Context:\n${contextString}\n\nHuman: ${input}`;
     }
 
-    // 5. API REQUEST
+    // 4. API REQUEST (Fixed Parameter: message)
+    // Removed 'model' and 'url' as the error indicates only 'message' is expected/required
     const res = await axios.get("https://shin-apis.onrender.com/ai/copilot", {
       params: { 
-          q: finalPrompt, 
-          model: model, 
-          url: imageUrl 
+          message: finalPrompt 
       },
       timeout: 60000
     });
 
-    const reply = res.data.response || res.data.answer || res.data.result;
+    const reply = res.data.content || res.data.response || res.data.answer;
     
-    if (!reply) throw new Error("No response");
+    if (!reply) {
+        // Log error if API returned something else
+        console.error("Copilot API unexpected response:", res.data);
+        throw new Error("No response content found");
+    }
 
-    // 6. SAVE MEMORY
+    // 5. SAVE MEMORY
     history.push({ user: input, bot: reply });
     if (history.length > 6) history.shift();
     copilotHistory.set(senderID, history);
 
-    // 7. SEND
-    const header = `💠 **Copilot [${model.toUpperCase()}]**`;
+    // 6. SEND
+    const header = `💠 **Copilot**`;
     await api.sendMessage(`${header}\n━━━━━━━━━━━━━━━━\n${reply}`, senderID);
 
   } catch (e) {
-    console.error("Copilot Error:", e.message);
-    api.sendMessage("❌ Copilot is unreachable.", senderID);
+    console.error("Copilot Error:", e.response?.data || e.message);
+    
+    // Check if the API sent a specific error message
+    const apiError = e.response?.data?.error || "Copilot is unreachable right now.";
+    api.sendMessage(`❌ ${apiError}`, senderID);
   } finally {
     if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID).catch(()=>{});
   }
