@@ -1,12 +1,12 @@
-const axios = require("axios");
+const { http } = require("../../utils");
 
 module.exports.config = {
     name: "deepimg",
     aliases: ["draw"],
     author: "Sethdico",
-    version: "1.2",
+    version: "1.2-Fast",
     category: "Fun",
-    description: "Generate Anime Image",
+    description: "Generate Anime Image.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 15,
@@ -14,24 +14,20 @@ module.exports.config = {
 
 module.exports.run = async function ({ event, args, api }) {
     const prompt = args.join(" ");
-    if (!prompt) return api.sendMessage("🎨 Usage: deepimg <description>", event.sender.id);
+    if (!prompt) return api.sendMessage("🎨 Usage: draw <text>", event.sender.id);
 
-    api.sendMessage("🎨 Generating...", event.sender.id);
-    if (api.sendTypingIndicator) api.sendTypingIndicator(true, event.sender.id).catch(()=>{});
-
+    api.sendMessage("🎨 Painting...", event.sender.id);
+    
     try {
-        // Updated API endpoint that is generally more stable for anime style
         const url = `https://shin-apis.onrender.com/ai/deepimg?prompt=${encodeURIComponent(prompt)}&style=anime`;
-        const res = await axios.get(url, { timeout: 20000 }); // 20s timeout for image gen
+        const res = await http.get(url);
         
-        const imgUrl = res.data.url || res.data.image;
-
-        if (imgUrl) {
-            await api.sendAttachment("image", imgUrl, event.sender.id);
+        if (res.data.url) {
+            await api.sendAttachment("image", res.data.url, event.sender.id);
         } else {
-            throw new Error("No image returned");
+            throw new Error("No image");
         }
     } catch (e) {
-        api.sendMessage("❌ Generation failed. Try a simpler prompt.", event.sender.id);
+        api.sendMessage("❌ Failed to generate image.", event.sender.id);
     }
 };
