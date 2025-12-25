@@ -3,7 +3,7 @@ const os = require('os');
 module.exports.config = {
     name: "stats",
     author: "Sethdico",
-    version: "1.1",
+    version: "1.2",
     category: "Admin",
     description: "check bot health.",
     adminOnly: true,
@@ -12,18 +12,16 @@ module.exports.config = {
 };
 
 module.exports.run = async function ({ reply }) {
-    try {
-        const mem = process.memoryUsage();
-        const uptime = process.uptime();
-        
-        const hrs = Math.floor(uptime / 3600);
-        const mins = Math.floor((uptime % 3600) / 60);
+    const mem = process.memoryUsage();
+    const uptime = process.uptime();
+    const hrs = Math.floor(uptime / 3600);
+    const mins = Math.floor((uptime % 3600) / 60);
 
-        const msg = `📊 **stats**
+    const msg = `📊 **stats**
 ━━━━━━━━━━━━━━━━
-🤖 **cmds:** ${global.client?.commands?.size || 0}
-🛡️ **admins:** ${global.ADMINS?.size || 0}
-🚫 **banned:** ${global.BANNED_USERS?.size || 0}
+🤖 **cmds:** ${global.client.commands.size}
+🛡️ **admins:** ${global.ADMINS.size}
+🚫 **banned:** ${global.BANNED_USERS.size}
 
 🧠 **memory**
 • used: ${(mem.heapUsed / 1024 / 1024).toFixed(2)} MB
@@ -34,9 +32,5 @@ module.exports.run = async function ({ reply }) {
 • uptime: ${hrs}h ${mins}m
 • platform: ${os.platform()}`;
 
-        return reply(msg);
-    } catch (e) {
-        console.error(e);
-        return reply("❌ stats failed. check logs.");
-    }
+    reply(msg);
 };
