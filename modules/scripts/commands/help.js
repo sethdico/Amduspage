@@ -1,19 +1,23 @@
 let helpCache = null;
+const feedbackShown = new Map(); // stores timestamps per user
 
 module.exports.config = {
   name: "help",
   author: "Sethdico",
-  version: "12.3",
+  version: "12.5",
   category: "Utility",
-  description: "view commands.",
+  description: "view commands. feedback shows every 23h.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 2,
 };
 
-module.exports.run = async ({ event, args, reply }) => {
+module.exports.run = async ({ event, args, api, reply }) => {
   const input = args[0]?.toLowerCase();
+  const senderID = event.sender.id;
+  const now = Date.now();
 
+  // 1. specific command info
   if (input && input !== "admin") {
     const cmdName = global.client.commands.has(input) ? input : global.client.aliases.get(input);
     if (cmdName) {
@@ -22,6 +26,7 @@ module.exports.run = async ({ event, args, reply }) => {
     }
   }
 
+  // 2. main menu cache
   if (!helpCache) {
     const categories = {};
     for (const [name, cmd] of global.client.commands) {
@@ -38,10 +43,23 @@ module.exports.run = async ({ event, args, reply }) => {
     helpCache = menu;
   }
 
+  // 3. admin view
   if (input === "admin") {
-    if (!global.ADMINS.has(event.sender.id)) return reply("⛔ admin only.");
+    if (!global.ADMINS.has(senderID)) return reply("⛔ admin only.");
     return reply(`🔐 **admin**\n[ stats, ban, unban, broadcast ]`);
   }
 
-  reply(helpCache);
+  // 4. send menu
+  await reply(helpCache);
+  
+  // 5. lowkey feedback logic
+  const lastTime = feedbackShown.get(senderID) || 0;
+  const oneDay = 24 * 60 * 60 * 1000; // 24 hour cooldown
+
+  if (now - lastTime > oneDay) {
+    feedbackShown.set(senderID, now);
+    setTimeout(() => {
+      api.sendFeedback(senderID);
+    }, 3000);
+  }
 };
