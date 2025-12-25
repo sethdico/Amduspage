@@ -3,7 +3,6 @@ const fs = require("fs");
 const path = require("path");
 const { URL } = require("url");
 
-// === CONFIGURATION ===
 const CONFIG = {
   API_URL: "https://app.chipp.ai/api/v1/chat/completions",
   API_KEY: process.env.CHIPP_API_KEY, 
@@ -15,7 +14,6 @@ const CONFIG = {
 const sessions = new Map();
 const rateLimitStore = new Map();
 
-// === HELPERS ===
 async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
   try {
     const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -30,30 +28,32 @@ async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
 module.exports.config = {
   name: "ai",
   author: "Sethdico",
-  version: "16.8-FinalFix",
+  version: "16.9",
   category: "AI",
-  description: "Advanced Multi-AI: Vision, Web Search, and Chat.",
+  description: "chat, vision, youtube videos, real-time info and files.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 0, 
 };
 
-module.exports.run = async function ({ event, args, api }) {
+module.exports.run = async function ({ event, args, api, reply }) {
   const senderID = event.sender.id;
   const userPrompt = args.join(" ").trim();
   const mid = event.message?.mid;
 
-  if (!CONFIG.API_KEY) return api.sendMessage("❌ System Error: CHIPP_API_KEY is missing.", senderID);
+  if (!CONFIG.API_KEY) return reply("❌ chipp_api_key missing on render.");
   
   const now = Date.now();
   const userTs = rateLimitStore.get(senderID) || [];
   const recentTs = userTs.filter(ts => now - ts < CONFIG.RATE_LIMIT.windowMs);
-  if (recentTs.length >= CONFIG.RATE_LIMIT.requests) return api.sendMessage("⏳ Too fast! Please wait a moment.", senderID);
+  if (recentTs.length >= CONFIG.RATE_LIMIT.requests) return reply("⏳ too fast. slow down.");
   recentTs.push(now);
   rateLimitStore.set(senderID, recentTs);
 
   let imageUrl = "";
   const isSticker = !!event.message?.sticker_id;
+  
+  // image detection
   if (event.message?.attachments?.[0]?.type === "image" && !isSticker) {
     imageUrl = event.message.attachments[0].payload.url;
   } else if (event.message?.reply_to?.attachments?.[0]?.type === "image") {
@@ -62,11 +62,12 @@ module.exports.run = async function ({ event, args, api }) {
 
   if (userPrompt.toLowerCase() === "clear") { 
       sessions.delete(senderID); 
-      return api.sendMessage("🧹 Conversation memory cleared.", senderID); 
+      return reply("🧹 cleared memory."); 
   }
+  
   if (isSticker && !userPrompt) return; 
-  if (imageUrl && !userPrompt) return api.sendMessage("🖼️ I see the image! What should I do?", senderID);
-  if (!userPrompt && !imageUrl) return api.sendMessage("👋 Hi! I'm Amdusbot. I can search the web, see images, and write documents.", senderID);
+  if (imageUrl && !userPrompt) return reply("🖼️ i see the image. reply to the image with instructions");
+  if (!userPrompt && !imageUrl) return reply("👋 hi. i'm amdusbot. i can search, see images, and write files.");
 
   const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
   if (userPrompt && youtubeRegex.test(userPrompt)) await sendYouTubeThumbnail(userPrompt, senderID, api);
@@ -74,111 +75,62 @@ module.exports.run = async function ({ event, args, api }) {
   if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
 
   try {
-    const identityPrompt = `
-[SYSTEM]: You are Amdusbot, an advanced AI Assistant by Sethdico.
-[MODE]: Helpful, Concise, Intelligent.
-[INTERNAL REASONING]: Use Tree of Thoughts and Chain of Verification internally. Output only the final result.
-[CAPABILITIES]:
-1. VISION: Analyze images via URL.
-2. WEB SEARCH: Search real-time info.
-3. FILES: Generate .pdf, .docx, .txt, .xlsx. Provide RAW DIRECT URL only.
-[INSTRUCTIONS]:
-- Response limit: 2000 characters.
-- "Who made you?": Answer "Seth Asher Salinguhay (Sethdico)".
-`.trim();
+    const identityPrompt = `[SYSTEM]: Amdusbot by Sethdico. Helpful, lowkey, intelligent. Use Tree of Thoughts. Final result only. Response limit 2000 chars. Maker: Seth Asher Salinguhay.`;
 
     let sessionData = sessions.get(senderID) || { chatSessionId: null };
 
-    const requestBody = {
+    const response = await axios.post(CONFIG.API_URL, {
       model: CONFIG.MODEL_ID,
-      messages: [{ 
-        role: "user", 
-        content: `${identityPrompt}\n\nUser Input: ${userPrompt}\n${imageUrl ? `[IMAGE CONTEXT]: ${imageUrl}` : ""}` 
-      }],
+      messages: [{ role: "user", content: `${identityPrompt}\n\nInput: ${userPrompt}\n${imageUrl ? `[IMAGE]: ${imageUrl}` : ""}` }],
+      chatSessionId: sessionData.chatSessionId,
       stream: false
-    };
-
-    if (sessionData.chatSessionId) {
-      requestBody.chatSessionId = sessionData.chatSessionId;
-    }
-
-    const response = await axios.post(CONFIG.API_URL, requestBody, {
-      headers: { "Authorization": `Bearer ${CONFIG.API_KEY}`, "Content-Type": "application/json" },
+    }, {
+      headers: { "Authorization": `Bearer ${CONFIG.API_KEY}` },
       timeout: CONFIG.TIMEOUT
     });
 
-    if (response.data.chatSessionId) {
-      sessions.set(senderID, { chatSessionId: response.data.chatSessionId });
-    }
+    if (response.data.chatSessionId) sessions.set(senderID, { chatSessionId: response.data.chatSessionId });
 
     const replyContent = response.data?.choices?.[0]?.message?.content || "";
-
-    const fileRegex = /(https?:\/\/[^\s)]+\.(?:pdf|docx|doc|xlsx|xls|pptx|ppt|txt|csv|zip|rar|7z|jpg|jpeg|png|gif|webp|mp3|wav|mp4)(?:\?[^\s)]*)?)/i;
+    const fileRegex = /(https?:\/\/[^\s)]+\.(?:pdf|docx|xlsx|txt|jpg|jpeg|png|mp4|mp3|zip)(?:\?[^\s)]*)?)/i;
     const match = replyContent.match(fileRegex);
 
     if (match) {
       const fileUrl = match[0].replace(/[).,]+$/, ""); 
-      const cacheDir = path.join(__dirname, "cache");
-      if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+      const textPart = replyContent.replace(match[0], "").trim();
+      if (textPart) await reply(textPart);
 
-      let fileName = "";
+      let fileName = `file_${Date.now()}`;
       try {
           const urlObj = new URL(fileUrl);
-          fileName = urlObj.searchParams.get("fileName");
-          if (!fileName) {
-              fileName = path.basename(urlObj.pathname);
-          }
-          if (!fileName || fileName === "/") fileName = `file_${Date.now()}.bin`;
-          fileName = decodeURIComponent(fileName).replace(/[^a-zA-Z0-9._-]/g, "_"); 
-      } catch (e) { fileName = `file_${Date.now()}.bin`; }
+          fileName = urlObj.searchParams.get("fileName") || path.basename(urlObj.pathname) || fileName;
+          fileName = decodeURIComponent(fileName).replace(/[^a-zA-Z0-9._-]/g, "_");
+      } catch (e) {}
 
-      const ext = path.extname(fileName).toLowerCase();
-      const isImage = [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext);
+      const isImage = [".jpg", ".jpeg", ".png", ".webp"].includes(path.extname(fileName).toLowerCase());
+      if (!isImage) await reply("downloading file...");
 
-      const textPart = replyContent.replace(match[0], "").trim();
-      if (textPart) await api.sendMessage(textPart, senderID);
-
-      if (!isImage) {
-        await api.sendMessage("the file is in Base64 you either decode it using me via pasting", senderID);
-      }
-
-      const filePath = path.join(cacheDir, fileName);
+      const filePath = path.join(__dirname, "cache", fileName);
       const fileWriter = fs.createWriteStream(filePath);
 
-      try {
-          const fileRes = await axios({ url: fileUrl, method: 'GET', responseType: 'stream' });
-          fileRes.data.pipe(fileWriter);
+      const fileRes = await axios({ url: fileUrl, method: 'GET', responseType: 'stream' });
+      fileRes.data.pipe(fileWriter);
 
-          await new Promise((resolve, reject) => {
-              fileWriter.on('finish', resolve);
-              fileWriter.on('error', reject);
-          });
+      await new Promise((resolve) => fileWriter.on('finish', resolve));
 
-          const stats = fs.statSync(filePath);
-          if (stats.size > 24 * 1024 * 1024) {
-             await api.sendMessage(`📂 File too large for direct send. Download: ${fileUrl}`, senderID);
-          } else {
-             const type = isImage ? "image" : "file";
-             await api.sendAttachment(type, filePath, senderID);
-          }
-      } catch (err) {
-          await api.sendMessage(`📂 Connection failed. Link: ${fileUrl}`, senderID);
-      } finally {
-          setTimeout(() => { 
-            if (fs.existsSync(filePath)) {
-              try { fs.unlinkSync(filePath); } catch(e) {}
-            }
-          }, 30000);
+      const stats = fs.statSync(filePath);
+      if (stats.size > 25 * 1024 * 1024) {
+          await reply(`📂 too big to send. link: ${fileUrl}`);
+      } else {
+          await api.sendAttachment(isImage ? "image" : "file", filePath, senderID);
       }
+      setTimeout(() => { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); }, 10000);
     } else {
-      await api.sendMessage(replyContent, senderID);
+      await reply(replyContent);
     }
 
-    if (api.setMessageReaction) api.setMessageReaction("✅", mid);
-
   } catch (error) {
-    console.error("AI Error:", error.message);
-    api.sendMessage("❌ AI Glitch. Please try again.", senderID);
+    reply("❌ glitch. try again.");
   } finally {
     if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
   }
