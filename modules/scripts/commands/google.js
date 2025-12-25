@@ -2,11 +2,10 @@ const axios = require("axios");
 
 module.exports.config = {
     name: "google",
-    aliases: ["gsearch", "g"],
     author: "Sethdico",
-    version: "2.0-Carousel",
+    version: "2.1",
     category: "Utility",
-    description: "Search Google and view website screenshots in a carousel.",
+    description: "search google with carousel results.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -14,11 +13,10 @@ module.exports.config = {
 
 module.exports.run = async function ({ event, args, api }) {
     const query = args.join(" ");
-    if (!query) return api.sendMessage("🔍 Usage: google <topic>", event.sender.id);
+    if (!query) return api.sendMessage("🔍 usage: google <topic>", event.sender.id);
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, event.sender.id).catch(()=>{});
 
-    // ✅ FIXED: Pulled from Environment
     const API_KEY = process.env.GOOGLE_API_KEY; 
     const CX = process.env.GOOGLE_CX; 
 
@@ -28,34 +26,27 @@ module.exports.run = async function ({ event, args, api }) {
         const items = res.data.items;
 
         if (!items || items.length === 0) {
-            return api.sendMessage(`❌ No results found for "${query}".`, event.sender.id);
+            return api.sendMessage(`❌ no results for "${query}".`, event.sender.id);
         }
 
         const elements = items.slice(0, 5).map(item => {
+            // ✅ FIXED: Truncate title/subtitle to 80 chars (FB Carousel Limit)
             const cleanTitle = item.title.length > 80 ? item.title.substring(0, 77) + "..." : item.title;
-            const cleanSnippet = (item.snippet || "No description available").replace(/\n/g, " ");
-            const shortSnippet = cleanSnippet.length > 80 ? cleanSnippet.substring(0, 77) + "..." : cleanSnippet;
+            const snippet = (item.snippet || "no description").replace(/\n/g, " ");
+            const cleanSubtitle = snippet.length > 80 ? snippet.substring(0, 77) + "..." : snippet;
             const screenshotUrl = `https://image.thum.io/get/width/500/crop/400/noanimate/${item.link}`;
 
             return {
                 title: cleanTitle,
-                subtitle: shortSnippet,
+                subtitle: cleanSubtitle,
                 image_url: screenshotUrl,
-                buttons: [
-                    {
-                        type: "web_url",
-                        url: item.link,
-                        title: "🌍 Visit Site"
-                    }
-                ]
+                buttons: [{ type: "web_url", url: item.link, title: "🌍 visit site" }]
             };
         });
 
         await api.sendCarousel(elements, event.sender.id);
-
     } catch (e) {
-        console.error("GOOGLE ERROR:", e.response?.data || e.message);
-        api.sendMessage("❌ Google Search failed.", event.sender.id);
+        api.sendMessage("❌ google search failed.", event.sender.id);
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, event.sender.id).catch(()=>{});
     }
