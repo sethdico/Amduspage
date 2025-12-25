@@ -1,11 +1,11 @@
-const axios = require("axios");
+const { http } = require("../../utils");
 
 module.exports.config = {
     name: "wolfram",
     author: "Sethdico",
-    version: "4.2",
+    version: "4.2-Fast",
     category: "Utility",
-    description: "Advanced computational engine. Deep-scans all data pods, delivers full reports via split-messaging, and attaches relevant mathematical plots or graphs.",
+    description: "Solves math and science questions.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -22,27 +22,19 @@ module.exports.run = async function ({ event, args, api }) {
     const APP_ID = process.env.WOLFRAM_APP_ID;
 
     try {
-        const url = `https://api.wolframalpha.com/v2/query`;
-        
-        const response = await axios.get(url, {
+        const response = await http.get(`https://api.wolframalpha.com/v2/query`, {
             params: {
                 appid: APP_ID,
                 input: input,
                 output: "json",
                 format: "plaintext,image",
-            },
-            timeout: 30000 
+            }
         });
 
         const res = response.data.queryresult;
 
         if (!res.success || res.error) {
-            let errorMsg = "❌ Wolfram Alpha couldn't find a direct answer.";
-            if (res.didyoumeans) {
-                const suggestions = Array.isArray(res.didyoumeans) ? res.didyoumeans : [res.didyoumeans];
-                errorMsg += `\n\n🤔 **Did you mean:**\n• ${suggestions.slice(0, 3).map(s => s.val).join("\n• ")}`;
-            }
-            return api.sendMessage(errorMsg, senderID);
+            return api.sendMessage("❌ Wolfram couldn't solve that.", senderID);
         }
 
         let interpretation = "";
@@ -50,6 +42,7 @@ module.exports.run = async function ({ event, args, api }) {
         let extendedData = [];
         let images = [];
 
+        // Parse the weird Wolfram structure
         if (res.pods) {
             for (const pod of res.pods) {
                 const title = pod.title || "Info";
@@ -57,15 +50,16 @@ module.exports.run = async function ({ event, args, api }) {
                 const text = subpod?.plaintext;
                 const imgSrc = subpod?.img?.src;
 
-                if (imgSrc && (title.includes("Plot") || title.includes("Graph") || title.includes("Illustration") || title.includes("Map"))) {
+                // Collect graphs
+                if (imgSrc && (title.includes("Plot") || title.includes("Graph") || title.includes("Map"))) {
                     images.push(imgSrc);
                 }
 
-                if (!text || text.trim() === "") continue;
+                if (!text) continue;
 
                 if (title === "Input interpretation" || title === "Input") {
                     interpretation = text;
-                } else if (pod.primary || ["Result", "Decimal approximation", "Solution", "Value"].includes(title)) {
+                } else if (pod.primary || title === "Result") {
                     primaryResult = text;
                 } else {
                     extendedData.push(`📍 **${title}**\n${text}`);
@@ -73,9 +67,9 @@ module.exports.run = async function ({ event, args, api }) {
             }
         }
 
-        let fullReport = `🧮 **WOLFRAM KNOWLEDGE**\n━━━━━━━━━━━━━━━━\n`;
-        fullReport += `📥 **Query:** ${interpretation || input}\n\n`;
-        fullReport += `📤 **Primary Answer:**\n${primaryResult || "See data below."}\n\n`;
+        let fullReport = `🧮 **WOLFRAM**\n━━━━━━━━━━━━━━━━\n`;
+        fullReport += `📥 **Q:** ${interpretation || input}\n\n`;
+        fullReport += `📤 **A:**\n${primaryResult || "See details below."}\n\n`;
 
         if (extendedData.length > 0) {
             fullReport += `━━━━━━━━━━━━━━━━\n${extendedData.join("\n\n")}`;
@@ -83,15 +77,7 @@ module.exports.run = async function ({ event, args, api }) {
 
         await api.sendMessage(fullReport, senderID);
 
-        const buttons = [
-            { 
-                type: "web_url", 
-                url: `https://www.wolframalpha.com/input/?i=${encodeURIComponent(input)}`, 
-                title: "🌐 View Full Source" 
-            }
-        ];
-        await api.sendButton("🔗 For more details and interactive tools:", buttons, senderID);
-
+        // Send graphs if we found any
         if (images.length > 0) {
             for (const img of images.slice(0, 2)) {
                 await api.sendAttachment("image", img, senderID);
@@ -99,8 +85,7 @@ module.exports.run = async function ({ event, args, api }) {
         }
 
     } catch (e) {
-        console.error("Wolfram Error:", e.message);
-        api.sendMessage("❌ Wolfram Alpha is currently unavailable.", senderID);
+        api.sendMessage("❌ Wolfram is currently unavailable.", senderID);
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID).catch(() => {});
     }
