@@ -1,9 +1,9 @@
-const axios = require("axios");
+const { http } = require("../../utils");
 
 module.exports.config = {
   name: "gemini",
   author: "Sethdico",
-  version: "4.1-Optimized",
+  version: "4.1-Fast",
   category: "AI",
   description: "Google Gemini with Vision.",
   adminOnly: false,
@@ -16,7 +16,7 @@ module.exports.run = async ({ event, args, api }) => {
   let prompt = args.join(" ").trim();
   let imageUrl = "";
 
-  // Image Detection
+  // Check for image attachment or reply
   if (event.message?.attachments?.[0]?.type === "image") {
     imageUrl = event.message.attachments[0].payload.url;
   } else if (event.message?.reply_to?.attachments?.[0]?.type === "image") {
@@ -29,9 +29,8 @@ module.exports.run = async ({ event, args, api }) => {
   if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID).catch(()=>{});
 
   try {
-    const res = await axios.get("https://norch-project.gleeze.com/api/gemini", {
-      params: { prompt, imageurl: imageUrl },
-      timeout: 20000 // 20s Timeout
+    const res = await http.get("https://norch-project.gleeze.com/api/gemini", {
+      params: { prompt, imageurl: imageUrl }
     });
 
     const reply = res.data.response || res.data.content;
@@ -40,6 +39,6 @@ module.exports.run = async ({ event, args, api }) => {
     api.sendMessage(`🤖 **Gemini**\n━━━━━━━━━━━━━━━━\n${reply}`, senderID);
 
   } catch (e) {
-    api.sendMessage("❌ Gemini is overloaded. Try 'ai <question>' instead.", senderID);
+    api.sendMessage("❌ Gemini is overloaded. Try 'ai' instead.", senderID);
   }
 };
