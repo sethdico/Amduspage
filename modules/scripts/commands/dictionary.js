@@ -31,14 +31,16 @@ module.exports.run = async function ({ event, args, api }) {
     if (isSlang) return searchUrban(input, event, api);
 
     try {
-        // ✅ SECURED: Pulled from Render Environment
+        // ✅ FIXED: Pulled from Environment
         const apiKey = process.env.DICT_API_KEY;
         const url = `https://www.dictionaryapi.com/api/v3/references/collegiate/json/${encodeURIComponent(input)}?key=${apiKey}`;
         
         const response = await axios.get(url, { timeout: 5000 });
         const data = response.data;
 
-        if (!data?.length || typeof data[0] === "string") return searchUrban(input, event, api, true);
+        if (!data?.length || typeof data[0] === "string") {
+            return searchUrban(input, event, api, true); 
+        }
 
         const entry = data[0];
         const audioName = entry.hwi?.prs?.[0]?.sound?.audio;
@@ -54,6 +56,7 @@ module.exports.run = async function ({ event, args, api }) {
         
         await api.sendMessage(msg, event.sender.id);
         if (audioUrl) api.sendAttachment("audio", audioUrl, event.sender.id).catch(()=>{});
+
     } catch (error) {
         searchUrban(input, event, api, true);
     }
@@ -63,6 +66,7 @@ async function searchUrban(query, event, api, isFallback = false) {
     try {
         const res = await axios.get(`https://api.urbandictionary.com/v0/define?term=${encodeURIComponent(query)}`, { timeout: 3000 });
         if (!res.data.list?.length) return api.sendMessage(`❌ No definition found for "${query}".`, event.sender.id);
+
         const entry = res.data.list[0];
         const msg = `${isFallback ? "📖" : "🛹"} **${entry.word.toUpperCase()}**\n\n📝 ${entry.definition.replace(/[\[\]]/g, "")}\n\n💡 "${entry.example.replace(/[\[\]]/g, "")}"`;
         api.sendMessage(msg, event.sender.id);
