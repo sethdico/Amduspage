@@ -1,14 +1,14 @@
 const axios = require("axios");
 
-// stores user emails in RAM: Map<senderID, emailAddress>
-const userMails = new Map();
+// ram storage for sessions
+const sessions = new Map();
 
 module.exports.config = {
     name: "tempmail",
     author: "Sethdico",
-    version: "1.0",
+    version: "1.2",
     category: "Utility",
-    description: "generate temp mail and check inbox via apyhub.",
+    description: "temp mail via boomlify api.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -19,20 +19,30 @@ module.exports.run = async function ({ event, args, reply, api }) {
     const action = args[0]?.toLowerCase();
     const token = process.env.APY_TOKEN;
 
-    if (!token) return reply("❌ apy_token missing on render.");
+    if (!token || token === "SECURED_ON_RENDER") {
+        return reply("❌ apy_token missing on render environment.");
+    }
 
     // 1. generate mail
     if (action === "gen" || !action) {
         if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
         try {
-            const res = await axios.post('https://api.apyhub.com/utility/temp-email', {}, {
-                headers: { 'apy-token': token }
+            // using the exact boomlify create endpoint from your docs
+            const res = await axios.post('https://api.apyhub.com/boomlify/emails/create', {}, {
+                headers: { 'apy-token': token },
+                params: { time: "1hour" } // set to 1 hour so it doesn't expire too fast
             });
-            const email = res.data.data;
-            userMails.set(senderID, email);
-            return reply(`📧 **temp mail**\n━━━━━━━━━━━━━━━━\naddress: ${email}\n\n💡 type "tempmail inbox" to check for messages.`);
+
+            if (res.data.success) {
+                const email = res.data.email.address;
+                sessions.set(senderID, email);
+                return reply(`📧 **temp mail**\n━━━━━━━━━━━━━━━━\naddress: ${email}\nexpires: in 1 hour\n\n💡 type "tempmail inbox" to check.`);
+            } else {
+                throw new Error("API failed");
+            }
         } catch (e) {
-            return reply("❌ failed to generate mail.");
+            console.error(e.response?.data || e.message);
+            return reply("❌ failed to gen mail. check token.");
         } finally {
             if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
         }
@@ -40,22 +50,25 @@ module.exports.run = async function ({ event, args, reply, api }) {
 
     // 2. check inbox
     if (action === "inbox" || action === "check") {
-        const email = userMails.get(senderID);
-        if (!email) return reply("⚠️ you haven't generated a mail yet. type 'tempmail gen'.");
+        const email = sessions.get(senderID);
+        if (!email) return reply("⚠️ gen a mail first. type 'tempmail gen'.");
 
         if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
         try {
-            // using boomlify wrapper logic as provided in your link
-            const res = await axios.get(`https://api.apyhub.com/utility/temp-email/inbox?email=${email}`, {
-                headers: { 'apy-token': token }
+            // boomlify inbox endpoint
+            const res = await axios.get(`https://api.apyhub.com/boomlify/emails/inbox`, {
+                headers: { 'apy-token': token },
+                params: { address: email }
             });
 
-            const messages = res.data.data;
-            if (!messages || messages.length === 0) return reply("📭 inbox is empty.");
+            // adjusted based on standard boomlify response keys
+            const messages = res.data.items || res.data.data || [];
+            
+            if (messages.length === 0) return reply("📭 inbox is empty.");
 
-            let msg = `📬 **inbox for ${email}**\n━━━━━━━━━━━━━━━━\n`;
+            let msg = `📬 **inbox: ${email}**\n━━━━━━━━━━━━━━━━\n`;
             messages.slice(0, 5).forEach((m, i) => {
-                msg += `${i + 1}. from: ${m.from}\nsub: ${m.subject}\n\n`;
+                msg += `${i + 1}. from: ${m.from?.address || m.from}\nsub: ${m.subject}\n\n`;
             });
             
             return reply(msg);
@@ -68,8 +81,8 @@ module.exports.run = async function ({ event, args, reply, api }) {
 
     // 3. clear
     if (action === "clear") {
-        userMails.delete(senderID);
-        return reply("🧹 temp mail session cleared.");
+        sessions.delete(senderID);
+        return reply("🧹 session cleared.");
     }
 
     reply("❓ usage: tempmail <gen|inbox|clear>");
