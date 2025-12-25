@@ -1,0 +1,5 @@
+node_modules/
+.env
+page/data.json
+error.log
+modules/scripts/commands/cache/
