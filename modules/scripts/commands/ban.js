@@ -16,7 +16,7 @@ module.exports.config = {
 
 module.exports.run = async function ({ event, args, reply }) {
   const senderID = event.sender.id;
-  const cmd = event.message.text.toLowerCase().split(" ")[0];
+  const cmd = event.message.text.toLowerCase().split(" ")[0]; // get the first word
 
   if (!global.ADMINS.has(senderID)) return reply("❌ restricted.");
 
