@@ -2,7 +2,7 @@ const axios = require("axios");
 
 module.exports.config = {
     name: "google",
-    aliases: ["search", "find", "g"],
+    aliases: ["gsearch", "g"],
     author: "Sethdico",
     version: "2.0-Carousel",
     category: "Utility",
