@@ -9,7 +9,7 @@
   "WOLFRAM_APP_ID": "SECURED_ON_RENDER",
   "WIKI_ACCESS_TOKEN": "SECURED_ON_RENDER",
   "VERIFY_TOKEN": "pagebot123",
-  "ADMINS": ["25856275793976085"],
+  "ADMINS": "SECURED_ON_RENDER",
   "PREFIX": ".",
   "BOTNAME": "Amdusbot",
   "clearData": false,
