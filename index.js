@@ -1,3 +1,4 @@
+require('dotenv').config(); // ✅ CRITICAL: Loads your Render Environment Variables
 const web = require("./website/web.js");
 const webhook = require("./webhook.js");
 const parser = require("body-parser");
@@ -20,8 +21,7 @@ if (!fs.existsSync(cacheDir)) {
     console.log("🧹 SYSTEM: Cache cleared on startup.");
 }
 
-// --- 🚫 LOAD BANNED USERS (O(1) Optimization) ---
-// We load this once into memory so we don't read the file on every message
+// --- 🚫 LOAD BANNED USERS ---
 global.BANNED_USERS = new Set();
 try {
     if (fs.existsSync(bannedPath)) {
@@ -34,7 +34,6 @@ try {
     console.log(`🚫 Loaded ${global.BANNED_USERS.size} banned users.`);
 } catch (e) {
     console.error("⚠️ Failed to load ban list:", e.message);
-    // Create file if not exists to prevent future errors
     if (!fs.existsSync(bannedPath)) fs.writeFileSync(bannedPath, "[]");
 }
 
