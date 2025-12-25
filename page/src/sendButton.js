@@ -3,7 +3,7 @@ const axios = require("axios");
 module.exports = function (event) {
   return function sendButton(text, buttons, senderID) {
     const recipientID = senderID || event.sender.id;
-    // ✅ Truncate to 600 to prevent 640-character crash
+    // cuts button text to 600
     const safeText = text.length > 600 ? text.substring(0, 597) + "..." : text;
 
     const formattedButtons = buttons.map(btn => {
