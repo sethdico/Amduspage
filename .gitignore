@@ -1,5 +1,6 @@
 node_modules/
 .env
-page/data.json
-error.log
+config.json
 modules/scripts/commands/cache/
+modules/scripts/commands/banned.json
+reminders.json
