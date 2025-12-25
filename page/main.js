@@ -1,26 +1,23 @@
+const fs = require("fs");
+const path = require("path");
+
 module.exports = async function (event) {
   const config = require("../config.json");
   const api = {};
   
-  const scripts = [
-    "markAsSeen",
-    "sendMessage",
-    "sendTypingIndicator",
-    "sendAttachment",
-    "sendButton",
-    "sendQuickReply",
-    "sendCarousel",
-    "getUserInfo"
-  ];
+  // ✅ DYNAMIC LOADER: Scans the folder so you never have to edit this list again
+  const srcPath = path.join(__dirname, "src");
+  const scripts = fs.readdirSync(srcPath).filter(file => file.endsWith(".js"));
 
-  for (const scriptName of scripts) {
+  for (const file of scripts) {
     try {
-      const loadedScript = require(`./src/${scriptName}`);
+      const scriptName = path.parse(file).name;
+      const loadedScript = require(`./src/${file}`);
       if (typeof loadedScript === "function") {
         api[scriptName] = loadedScript(event);
       }
     } catch (e) {
-      console.error(`Failed to load API script: ${scriptName}`, e);
+      console.error(`❌ Failed to load API script: ${file}`, e);
     }
   }
   
