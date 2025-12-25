@@ -1,21 +1,21 @@
 const axios = require("axios");
 const https = require("https");
 
-// create a fast connection instance
-// keepAlive: true means we reuse the connection (way faster)
+// create a shared connection that stays open
+// this makes the bot much faster because it doesn't handshake every time
 const http = axios.create({
-    timeout: 20000,
+    timeout: 20000, // 20s timeout
     httpsAgent: new https.Agent({ keepAlive: true }),
     headers: { 'User-Agent': 'Amduspage/Bot' }
 });
 
 function getEventType(event) {
-    // simple check to see what kind of msg this is
+    // figure out what kind of message this is
     if (event.postback) return "postback";
     if (event.message) {
         if (event.message.attachments) return "attachment";
         if (event.message.reply_to) return "reply";
-        return "text"; // normal text
+        return "text"; 
     }
     return "unknown";
 }
