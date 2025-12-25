@@ -2,8 +2,6 @@ const config = require("./config.json");
 const utils = require("./modules/utils");
 
 let messagesCache = new Map();
-// ✅ Set token once globally
-global.PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN || config.PAGE_ACCESS_TOKEN;
 
 module.exports.listen = (event) => {
   if (!event || event.object !== "page") return;
