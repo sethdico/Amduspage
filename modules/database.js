@@ -25,7 +25,12 @@ module.exports = {
     removeBan: (userId) => db.run("DELETE FROM bans WHERE id = ?", [userId]),
     loadBansIntoMemory: (callback) => {
         db.all("SELECT id FROM bans", [], (err, rows) => {
-            if (!err && rows) callback(new Set(rows.map(r => r.id)));
+            if (err) {
+                console.error("[DB] Failed to load bans:", err.message);
+                if (callback) callback(new Set());
+            } else {
+                if (callback) callback(new Set(rows.map(r => r.id)));
+            }
         });
     },
     addReminder: (r) => db.run("INSERT INTO reminders VALUES (?,?,?,?)", [r.id, r.userId, r.message, r.fireAt]),
