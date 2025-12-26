@@ -1,10 +1,10 @@
-const db = require("../../database"); // FIXED: Correct relative path to database
+const db = require("../../database"); 
 const activeReminders = new Map();
 
-// FIX: Correctly import the API from the root/page/main.js
+// Import API from root/page/main.js
 let api;
 try {
-    api = require("../../../page/main").api; // FIXED: Correct relative path to main
+    api = require("../../../page/main").api; 
 } catch (e) {
     console.warn("API not ready for reminders yet.");
 }
@@ -39,7 +39,6 @@ module.exports.config = {
 };
 
 module.exports.run = async ({ event, args, api: commandApi }) => {
-  // Fallback: If global import failed/was too early, use the command's api
   if (!api) api = commandApi;
   
   const senderID = event.sender.id;
@@ -85,5 +84,4 @@ module.exports.run = async ({ event, args, api: commandApi }) => {
   commandApi.sendMessage(`✅ Reminder set.`, senderID);
 };
 
-// Start listening for stored reminders
 loadReminders();
