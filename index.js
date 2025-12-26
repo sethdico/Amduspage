@@ -6,6 +6,7 @@ const express = require("express");
 const path = require("path");
 const fs = require('fs').promises;
 const db = require("./modules/database");
+const rateLimiter = require("./modules/rateLimiter");
 
 const app = express();
 const config = require("./config.json");
@@ -87,6 +88,9 @@ const loadCommands = (dir) => {
     loadCommands(path.join(__dirname, "modules/scripts/commands"));
     
     app.use(parser.json({ limit: '20mb' }));
+    
+    // Fix: Add Rate Limiter to prevent spam attacks
+    app.use(rateLimiter);
 
     app.get("/", (req, res) => {
         res.send("🟢 Amduspage is Online and Healthy");
