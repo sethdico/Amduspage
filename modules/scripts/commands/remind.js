@@ -1,12 +1,10 @@
-const db = require("../../../database");
+const db = require("../../database"); // FIXED: Correct relative path to database
 const activeReminders = new Map();
 
-// FIX: Require the API directly so it works on startup
-// Note: We use a getter or deferred require if circular dependency is a risk, 
-// but here it is safe because main.js exports 'api' independently.
+// FIX: Correctly import the API from the root/page/main.js
 let api;
 try {
-    api = require("../../../../page/main").api;
+    api = require("../../../page/main").api; // FIXED: Correct relative path to main
 } catch (e) {
     console.warn("API not ready for reminders yet.");
 }
@@ -19,10 +17,9 @@ const loadReminders = () => {
                 const delay = r.fireAt - Date.now();
                 if (delay > 0 && delay < 2147483647) {
                     r.timeoutId = setTimeout(() => {
-                        // FIX: Use the imported api object
                         if (api) api.sendMessage(`⏰ **REMINDER**\n"${r.message}"`, r.userId);
                         activeReminders.delete(r.id);
-                        db.deleteReminder(r.id); // Optional: cleanup DB
+                        db.deleteReminder(r.id);
                     }, delay);
                 }
             }
@@ -30,10 +27,19 @@ const loadReminders = () => {
     });
 };
 
-module.exports.config = { name: "remind", author: "Sethdico", version: "2.2", category: "Utility", description: "Set a reminder.", adminOnly: false, usePrefix: false, cooldown: 3 };
+module.exports.config = { 
+    name: "remind", 
+    author: "Sethdico", 
+    version: "2.3", 
+    category: "Utility", 
+    description: "Set a reminder.", 
+    adminOnly: false, 
+    usePrefix: false, 
+    cooldown: 3 
+};
 
 module.exports.run = async ({ event, args, api: commandApi }) => {
-  // Update local api reference if command runs (just in case)
+  // Fallback: If global import failed/was too early, use the command's api
   if (!api) api = commandApi;
   
   const senderID = event.sender.id;
@@ -79,5 +85,5 @@ module.exports.run = async ({ event, args, api: commandApi }) => {
   commandApi.sendMessage(`✅ Reminder set.`, senderID);
 };
 
-// Start the listener
+// Start listening for stored reminders
 loadReminders();
