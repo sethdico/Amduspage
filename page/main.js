@@ -1,9 +1,10 @@
 const utils = require("../modules/utils");
+const handler = require("./handler"); // Import the logic handler
 const http = utils.http;
 
 const graphUrl = (id) => `https://graph.facebook.com/v21.0/${id}/messages`;
 
-// Define API wrapper functions
+// 1. Define API Functions
 const api = {
     sendMessage: (text, id) => http.post(graphUrl(id), { messaging_type: "RESPONSE", message: { text } }, { params: { access_token: global.PAGE_ACCESS_TOKEN }}),
     sendButton: (text, buttons, id) => http.post(graphUrl(id), { messaging_type: "RESPONSE", message: { attachment: { type: "template", payload: { template_type: "button", text, buttons } } } }, { params: { access_token: global.PAGE_ACCESS_TOKEN }}),
@@ -16,7 +17,14 @@ const api = {
             quick_replies: quickReplies.map(q => ({ content_type: "text", title: q, payload: q }))
         }
     }, { params: { access_token: global.PAGE_ACCESS_TOKEN }}),
-    // Added helper for raw getUserInfo since it was used in commands
+    sendCarousel: async (elements, id) => {
+        try {
+             await http.post(graphUrl(id), { 
+                recipient: { id }, 
+                message: { attachment: { type: "template", payload: { template_type: "generic", elements: elements.slice(0, 10) } } } 
+            }, { params: { access_token: global.PAGE_ACCESS_TOKEN }});
+        } catch (e) { console.error("Carousel error"); }
+    },
     getUserInfo: async (id) => {
         try {
             const res = await http.get(`https://graph.facebook.com/${id}?fields=first_name,last_name,profile_pic&access_token=${global.PAGE_ACCESS_TOKEN}`);
@@ -25,35 +33,14 @@ const api = {
     }
 };
 
-// Main Handler Function
-const handleEvent = async (event) => {
-    const senderID = event.sender.id;
-    if (!global.client.cooldowns.has(senderID)) global.client.cooldowns.set(senderID, new Map());
-    
-    const now = Date.now();
-    const cmdCooldowns = global.client.cooldowns.get(senderID);
-    
-    let msg = event.message?.text || "";
-    const args = msg.trim().split(/ +/);
-    const commandName = args.shift().toLowerCase();
-    
-    const cmd = global.client.commands.get(commandName) || global.client.commands.get(global.client.aliases.get(commandName));
-
-    if (cmd) {
-        if (cmd.config.adminOnly && !global.ADMINS.has(senderID)) return api.sendMessage("❌ Admins only.", senderID);
-        
-        const cooldownTime = (cmd.config.cooldown || 1) * 1000;
-        if (cmdCooldowns.has(cmd.config.name) && cmdCooldowns.get(cmd.config.name) + cooldownTime > now) 
-            return api.sendMessage("⏳ Wait.", senderID);
-
-        cmdCooldowns.set(cmd.config.name, now);
-        
-        try {
-            await cmd.run({ event, args, api, reply: (t) => api.sendMessage(t, senderID) });
-        } catch (e) { console.error("Cmd Error", e); api.sendMessage("❌ Error.", senderID); }
+// 2. Main Handler: Pass control to handler.js (where AI & Spam logic lives)
+module.exports = async (event) => {
+    try {
+        await handler(event, api);
+    } catch (e) {
+        console.error("Handler Error:", e.message);
     }
 };
 
-// Export the handler AND the api object
-module.exports = handleEvent;
+// 3. Export API (Required for remind.js to work)
 module.exports.api = api;
