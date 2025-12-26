@@ -4,29 +4,27 @@ const path = require("path");
 const tools = {}; 
 const srcPath = path.join(__dirname, "src");
 
-// load all the api scripts just once when bot starts
+// Load API wrappers once
 try {
     fs.readdirSync(srcPath).filter(f => f.endsWith(".js")).forEach(file => {
         const name = path.parse(file).name;
         tools[name] = require(`./src/${file}`);
     });
-    console.log(`Loaded ${Object.keys(tools).length} API tools`);
 } catch (e) {
-    console.log("Error loading API tools:", e);
+    console.error("Error loading API tools:", e);
 }
 
 module.exports = async function (event) {
-    // create a temp api object for this specific event
+    // Create specific API instance for this request
     const api = {};
 
-    // attach our pre-loaded tools
     for (const key in tools) {
-        // pass 'event' so the tool knows who to reply to automatically
         api[key] = tools[key](event);
     }
 
-    global.api = api; // update global ref just in case
+    // Fallback for background tasks (like reminders)
+    global.api = api; 
     
-    // send it to the handler
-    require("./handler.js")(event);
+    // Pass specific api to handler to prevent race conditions
+    require("./handler.js")(event, api);
 };
