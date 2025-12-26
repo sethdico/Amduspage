@@ -1,5 +1,5 @@
 const utils = require("../modules/utils");
-const handler = require("./handler"); // Import the logic handler
+const handler = require("./handler"); // Bridge to logic
 const http = utils.http;
 
 const graphUrl = (id) => `https://graph.facebook.com/v21.0/${id}/messages`;
@@ -33,7 +33,7 @@ const api = {
     }
 };
 
-// 2. Main Handler: Pass control to handler.js (where AI & Spam logic lives)
+// 2. Main Handler: Pass control to handler.js
 module.exports = async (event) => {
     try {
         await handler(event, api);
