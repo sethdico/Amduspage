@@ -1,6 +1,5 @@
-const { http } = require("../../utils"); // fast connection
+const http = require("../../utils");
 
-// Keep sessions in memory so they stay while the bot is running
 const sessions = new Map();
 
 module.exports.config = {
@@ -21,11 +20,15 @@ module.exports.run = async function ({ event, args, reply, api }) {
 
     if (!token) return reply("❌ APY_TOKEN missing.");
 
-    // Detect action from text or button click
+    // Auto-cleanup sessions if they get too big (Prevent Memory Leak)
+    if (sessions.size > 100) {
+        const keys = [...sessions.keys()];
+        for(let i=0; i<20; i++) sessions.delete(keys[i]);
+    }
+
     const fullText = (event.message?.text || "").toLowerCase();
     let action = args[0]?.toLowerCase();
 
-    // specific keyword triggers
     if (fullText.includes("generate")) action = "gen";
     if (fullText.includes("inbox") || fullText.includes("check")) action = "inbox";
     if (fullText.includes("clear")) action = "clear";
@@ -35,17 +38,11 @@ module.exports.run = async function ({ event, args, reply, api }) {
 
     // --- 1. READ MESSAGE ---
     if (action === "read") {
-        // try to find the number in the text (e.g. "read 1")
         const index = parseInt(args[1] || fullText.split("read")[1]) - 1;
-        
-        if (!session?.lastMessages?.[index]) {
-            return reply("⚠️ Can't find that message. Check inbox first.");
-        }
+        if (!session?.lastMessages?.[index]) return reply("⚠️ Can't find that message. Check inbox first.");
 
         const mail = session.lastMessages[index];
-        // clean up html tags for chat
         const body = mail.body_text || mail.body_html?.replace(/<[^>]*>?/gm, '') || "No text content.";
-        
         const readMsg = `📖 **MESSAGE**\n━━━━━━━━━━━━━━━━\n👤 **From:** ${mail.from_name || "Unknown"} (${mail.from_email})\n📝 **Sub:** ${mail.subject}\n━━━━━━━━━━━━━━━━\n\n${body.substring(0, 1800)}`;
         
         return api.sendQuickReply(readMsg, ["Check Inbox", "Clear Session"], senderID);
@@ -56,7 +53,6 @@ module.exports.run = async function ({ event, args, reply, api }) {
         if (!session) return reply("⚠️ You don't have an email yet. Type 'generate'.");
 
         try {
-            // use fast http client
             const res = await http.get(`https://api.apyhub.com/boomlify/emails/messages/${session.id}`, {
                 headers: { 'apy-token': token }
             });
@@ -67,7 +63,6 @@ module.exports.run = async function ({ event, args, reply, api }) {
                 return api.sendQuickReply(`📭 **Inbox is Empty**\nAddress: ${session.email}`, ["Check Inbox", "Clear Session"], senderID);
             }
 
-            // save messages so we can read them later
             session.lastMessages = messages;
             sessions.set(senderID, session);
 
@@ -78,9 +73,7 @@ module.exports.run = async function ({ event, args, reply, api }) {
             list += `━━━━━━━━━━━━━━━━\n💡 Type: 'read 1' to view.`;
             
             return api.sendQuickReply(list, ["Check Inbox", "Clear Session"], senderID);
-        } catch (e) { 
-            return reply("❌ Inbox check failed. Email might be expired."); 
-        }
+        } catch (e) { return reply("❌ Inbox check failed. Email might be expired."); }
     }
 
     // --- 3. GENERATE NEW EMAIL ---
@@ -93,7 +86,6 @@ module.exports.run = async function ({ event, args, reply, api }) {
 
             if (res.data.success) {
                 const data = res.data.email;
-                
                 sessions.set(senderID, { 
                     email: data.address, 
                     id: data.id, 
@@ -103,25 +95,19 @@ module.exports.run = async function ({ event, args, reply, api }) {
                 const mainMsg = `📧 **NEW EMAIL**\n━━━━━━━━━━━━━━━━\nAddress: ${data.address}\nStatus: Active (1 Hour)\n━━━━━━━━━━━━━━━━`;
                 
                 await api.sendQuickReply(mainMsg, ["Check Inbox", "Clear Session"], senderID);
-                
-                // send just the address so user can copy it easily
                 setTimeout(() => { reply(data.address); }, 1000);
                 return;
             }
-        } catch (e) { 
-            return reply("❌ Limit reached. Try again later."); 
-        }
+        } catch (e) { return reply("❌ Limit reached. Try again later."); }
     }
 
     // --- 4. CLEAR ---
     if (action === "clear") {
         if (!session) return reply("🧹 Nothing to clear.");
         try {
-            // try to delete from server
             http.delete(`https://api.apyhub.com/boomlify/emails/${session.id}`, {
                 headers: { 'apy-token': token }
-            }).catch(()=>{}); // ignore errors here
-            
+            }).catch(()=>{}); 
             sessions.delete(senderID);
             return reply("🧹 Session wiped.");
         } catch (e) {
