@@ -19,7 +19,7 @@ const LAWS = [
 
 module.exports.config = {
     name: "48laws",
-    author: "Sethdico (Optimized)",
+    author: "Sethdico",
     version: "1.2",
     category: "Fun",
     description: "Random Law of Power.",
@@ -31,7 +31,7 @@ module.exports.config = {
 module.exports.run = async function ({ event, args, api }) {
     let num = args[0] ? parseInt(args[0]) : Math.floor(Math.random() * 48) + 1;
     if (isNaN(num) || num < 1 || num > 48) num = Math.floor(Math.random() * 48) + 1;
-    
+
     const msg = `📖 **Law #${num}**\n━━━━━━━━━━━━━━━━\n${LAWS[num-1]}`;
     
     // Fallback to text if buttons fail
