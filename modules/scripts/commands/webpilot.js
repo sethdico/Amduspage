@@ -3,9 +3,9 @@ const { http } = require("../../utils");
 module.exports.config = { 
     name: "webpilot", 
     author: "Sethdico",
-    version: "1.1",
+    version: "1.2",
     category: "AI", 
-    description: "Search the web with AI.",
+    description: "WebPilot Search AI",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5 
@@ -13,15 +13,15 @@ module.exports.config = {
 
 module.exports.run = async function ({ event, args, api, reply }) {
     const input = args.join(" ");
-    if (!input) return reply("🌐 Usage: webpilot <search>");
+    if (!input) return reply("🌐 Usage: webpilot <query>");
 
     try {
-        const res = await http.get("https://betadash-api-swordslush-production.up.railway.app/webpilot", { 
-            params: { search: input } 
+        const res = await http.get("https://shin-apis.onrender.com/ai/webcopilot", { 
+            params: { question: input } 
         });
-        const result = res.data.response || res.data.result || res.data.message;
-        api.sendMessage(`🌐 **WEBPILOT**\n━━━━━━━━━━━━━━━━\n${result || "Empty response."}`, event.sender.id);
+        const result = res.data.response || res.data.content;
+        api.sendMessage(`🌐 **WEBPILOT**\n━━━━━━━━━━━━━━━━\n${result}`, event.sender.id);
     } catch (e) {
-        reply("❌ Webpilot error.");
+        reply("❌ Webpilot search failed.");
     }
 };
