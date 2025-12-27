@@ -1,9 +1,9 @@
-const { http } = require("../../utils");
+const { http, parseAI } = require("../../utils");
 
 module.exports.config = {
   name: "copilot",
   author: "Sethdico",
-  version: "5.5",
+  version: "6.0",
   category: "AI",
   description: "Copilot AI (default, think, gpt5)",
   adminOnly: false,
@@ -15,7 +15,6 @@ module.exports.run = async function ({ event, args, api, reply }) {
   let model = "default";
   let message = args.join(" ");
 
-  // Model Selector Logic
   if (args[0]?.toLowerCase() === "think") {
       model = "think-deeper";
       message = args.slice(1).join(" ");
@@ -24,28 +23,18 @@ module.exports.run = async function ({ event, args, api, reply }) {
       message = args.slice(1).join(" ");
   }
 
-  if (!message) {
-      return reply("💠 **Copilot Usage:**\n1. copilot <text>\n2. copilot think <text>\n3. copilot gpt5 <text>");
-  }
-
+  if (!message) return reply("💠 Usage: copilot [think/gpt5] <text>");
   if (api.sendTypingIndicator) api.sendTypingIndicator(true, event.sender.id);
 
   try {
     const res = await http.get("https://shin-apis.onrender.com/ai/copilot", {
-        params: { 
-            message: message, 
-            model: model 
-        } 
+        params: { message: message, model: model } 
     });
-    
-    // Using the 'answer' key confirmed by your playground test
-    const result = res.data.answer || res.data.content || res.data.response || res.data.result;
-    
-    const modelName = model === "default" ? "DEFAULT" : (model === "gpt-5" ? "GPT-5" : "DEEP THINK");
-    api.sendMessage(`💠 **COPILOT (${modelName})**\n━━━━━━━━━━━━━━━━\n${result}`, event.sender.id);
-
+    const result = parseAI(res);
+    const modelTag = model.toUpperCase().replace("-", " ");
+    api.sendMessage(`💠 **COPILOT (${modelTag})**\n━━━━━━━━━━━━━━━━\n${result || "No response."}`, event.sender.id);
   } catch (e) {
-    reply("❌ Copilot is unreachable.");
+    reply("❌ Copilot unreachable.");
   } finally {
     if (api.sendTypingIndicator) api.sendTypingIndicator(false, event.sender.id);
   }
