@@ -3,7 +3,7 @@ const { http } = require("../../utils");
 module.exports.config = { 
     name: "webpilot", 
     author: "Sethdico",
-    version: "1.2",
+    version: "1.3",
     category: "AI", 
     description: "WebPilot Search AI",
     adminOnly: false,
@@ -19,7 +19,10 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const res = await http.get("https://shin-apis.onrender.com/ai/webcopilot", { 
             params: { question: input } 
         });
-        const result = res.data.response || res.data.content;
+        
+        // FIXED: prioritized res.data.answer
+        const result = res.data.answer || res.data.response || res.data.content;
+        
         api.sendMessage(`🌐 **WEBPILOT**\n━━━━━━━━━━━━━━━━\n${result}`, event.sender.id);
     } catch (e) {
         reply("❌ Webpilot search failed.");
