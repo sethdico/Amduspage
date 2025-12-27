@@ -1,43 +1,24 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-const dbPath = path.join(__dirname, 'bot_data.db');
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) console.error('[DB] Connection Error:', err.message);
-    else console.log('🟢 Connected to SQLite Database.');
-});
+const dbPath = path.join(__dirname, '../bot_data.db');
+const db = new sqlite3.Database(dbPath);
 
 db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS bans (id TEXT PRIMARY KEY)`);
-    db.run(`CREATE TABLE IF NOT EXISTS reminders (
-        id TEXT PRIMARY KEY,
-        userId TEXT,
-        message TEXT,
-        fireAt INTEGER
-    )`);
+    db.run(`CREATE TABLE IF NOT EXISTS reminders (id TEXT PRIMARY KEY, userId TEXT, message TEXT, fireAt INTEGER)`);
+    
+    // Maintenance: Delete old records and shrink database size
+    db.run(`DELETE FROM reminders WHERE fireAt < ${Date.now()}`);
+    db.run(`VACUUM`); 
+    console.log("🟢 Database Optimized.");
 });
 
 module.exports = {
-    isBanned: (userId) => new Promise((resolve) => {
-        db.get("SELECT 1 FROM bans WHERE id = ?", [userId], (err, row) => resolve(!!row));
-    }),
-    addBan: (userId) => db.run("INSERT OR REPLACE INTO bans (id) VALUES (?)", [userId]),
-    removeBan: (userId) => db.run("DELETE FROM bans WHERE id = ?", [userId]),
-    loadBansIntoMemory: (callback) => {
-        db.all("SELECT id FROM bans", [], (err, rows) => {
-            if (err) {
-                console.error("[DB] Failed to load bans:", err.message);
-                if (callback) callback(new Set());
-            } else {
-                if (callback) callback(new Set(rows.map(r => r.id)));
-            }
-        });
-    },
+    addBan: (id) => db.run("INSERT OR REPLACE INTO bans (id) VALUES (?)", [id]),
+    removeBan: (id) => db.run("DELETE FROM bans WHERE id = ?", [id]),
+    loadBansIntoMemory: (cb) => db.all("SELECT id FROM bans", (err, rows) => cb(new Set(rows?.map(r => r.id) || []))),
     addReminder: (r) => db.run("INSERT INTO reminders VALUES (?,?,?,?)", [r.id, r.userId, r.message, r.fireAt]),
-    getActiveReminders: (callback) => {
-        db.all("SELECT * FROM reminders WHERE fireAt > ?", [Date.now()], (err, rows) => {
-            if (!err && rows) callback(rows);
-        });
-    },
-    deleteReminder: (id) => db.run("DELETE FROM reminders WHERE id = ?", [id])
+    deleteReminder: (id) => db.run("DELETE FROM reminders WHERE id = ?", [id]),
+    getActiveReminders: (cb) => db.all("SELECT * FROM reminders WHERE fireAt > ?", [Date.now()], (err, rows) => cb(rows || []))
 };
