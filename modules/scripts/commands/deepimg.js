@@ -4,30 +4,31 @@ module.exports.config = {
     name: "deepimg",
     aliases: ["draw"],
     author: "Sethdico",
-    version: "1.2-Fast",
+    version: "2.0",
     category: "Fun",
-    description: "Generate Anime Image.",
+    description: "AI Image Generator",
     adminOnly: false,
     usePrefix: false,
     cooldown: 15,
 };
 
-module.exports.run = async function ({ event, args, api }) {
+module.exports.run = async function ({ event, args, api, reply }) {
     const prompt = args.join(" ");
-    if (!prompt) return api.sendMessage("🎨 Usage: draw <text>", event.sender.id);
-
-    api.sendMessage("🎨 Painting...", event.sender.id);
+    if (!prompt) return reply("🎨 Usage: draw <prompt>");
     
+    reply("🎨 Painting your request... please wait.");
+
     try {
-        const url = `https://shin-apis.onrender.com/ai/deepimg?prompt=${encodeURIComponent(prompt)}&style=anime`;
-        const res = await http.get(url);
+        const res = await http.get("https://shin-apis.onrender.com/ai/deepimg", {
+            params: { prompt: prompt, style: "anime", size: "3:2" }
+        });
         
         if (res.data.url) {
             await api.sendAttachment("image", res.data.url, event.sender.id);
         } else {
-            throw new Error("No image");
+            throw new Error("No image URL");
         }
     } catch (e) {
-        api.sendMessage("❌ Failed to generate image.", event.sender.id);
+        reply("❌ Failed to generate image.");
     }
 };
