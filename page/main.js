@@ -1,32 +1,33 @@
-const utils = require("../modules/utils");
-const handler = require("./handler"); 
-const http = utils.http;
+const path = require("path");
+const fs = require("fs");
+const handler = require("./handler");
 
-const api = {
-    sendMessage: (text, id) => http.post(`https://graph.facebook.com/v21.0/me/messages`, { 
-        recipient: { id }, message: { text }, messaging_type: "RESPONSE" 
-    }, { params: { access_token: global.PAGE_ACCESS_TOKEN }}),
-    
-    sendButton: (text, buttons, id) => http.post(`https://graph.facebook.com/v21.0/me/messages`, {
-        recipient: { id }, message: { attachment: { type: "template", payload: { template_type: "button", text, buttons } } }
-    }, { params: { access_token: global.PAGE_ACCESS_TOKEN }}),
+// Dynamically load every tool in the /src folder
+const srcPath = path.join(__dirname, "src");
+const tools = {};
 
-    sendAttachment: (type, url, id) => http.post(`https://graph.facebook.com/v21.0/me/messages`, {
-        recipient: { id }, message: { attachment: { type: type === "image" ? "image" : "file", payload: { url } } }
-    }, { params: { access_token: global.PAGE_ACCESS_TOKEN }}),
-
-    sendTypingIndicator: (state, id) => http.post(`https://graph.facebook.com/v21.0/me/messages`, {
-        recipient: { id }, sender_action: state ? "typing_on" : "typing_off"
-    }, { params: { access_token: global.PAGE_ACCESS_TOKEN }}),
-
-    getUserInfo: async (id) => {
-        try {
-            const res = await http.get(`https://graph.facebook.com/${id}?fields=first_name,last_name&access_token=${global.PAGE_ACCESS_TOKEN}`);
-            return res.data;
-        } catch (e) { return { first_name: "User" }; }
+fs.readdirSync(srcPath).forEach(file => {
+    if (file.endsWith(".js")) {
+        const name = path.parse(file).name;
+        tools[name] = require(`./src/${file}`);
     }
-};
+});
 
-module.exports = async (event) => {
-    try { await handler(event, api); } catch (e) { console.error("Handler Error:", e.message); }
+module.exports = async function (event) {
+    const api = {};
+
+    // Bind every tool (sendMessage, sendQuickReply, etc.) to this specific event
+    for (const key in tools) {
+        api[key] = tools[key](event);
+    }
+
+    // Set a global fallback just in case some commands use it, 
+    // but the handler uses the local 'api' passed below.
+    global.api = api; 
+
+    try {
+        await handler(event, api);
+    } catch (e) {
+        console.error("[Fatal Handler Error]:", e);
+    }
 };
