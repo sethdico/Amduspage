@@ -1,11 +1,11 @@
-const { http } = require("../../utils");
+const { http, parseAI } = require("../../utils");
 
 module.exports.config = {
     name: "quillbot",
     author: "Sethdico",
-    version: "2.5",
+    version: "6.0",
     category: "AI",
-    description: "AI Paraphraser",
+    description: "Quillbot Ai.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -20,17 +20,15 @@ module.exports.run = async function ({ event, args, api, reply }) {
              params: { prompt: input } 
         });
 
-        let content = res.data.response || "";
+        let content = parseAI(res) || "";
         
-        // REASONING PARSER: Extracts text from the complex playground response
+        // Handle SSE "output_done" format if present
         if (content.includes("output_done")) {
             const match = content.match(/"text":"(.*?)"/);
             if (match) content = match[1].replace(/\\n/g, '\n');
-        } else {
-            content = res.data.result || res.data.message || content;
         }
 
-        api.sendMessage(`✍️ **QUILLBOT**\n━━━━━━━━━━━━━━━━\n${content}`, event.sender.id);
+        api.sendMessage(`✍️ **QUILLBOT**\n━━━━━━━━━━━━━━━━\n${content || "No response."}`, event.sender.id);
     } catch (error) {
         reply("❌ Quillbot error.");
     }
