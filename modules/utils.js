@@ -11,13 +11,13 @@ const parseAI = (res) => {
     if (!res || !res.data) return null;
     const d = res.data;
 
-    // 1. CHIPP.AI / OPENAI FORMAT (The core fix)
+    // 1. CHIPP.AI / OPENAI FORMAT (Matches your documentation)
     if (d.choices?.[0]?.message?.content) return d.choices[0].message.content;
     
-    // 2. Error Reporting (Tells you if your key/plan is the problem)
+    // 2. Error Reporting
     if (d.error) return `⚠️ API Error: ${d.error.message || d.error}`;
 
-    // 3. Fallback for other community APIs
+    // 3. Fallback for other APIs
     let text = d.answer || d.response || d.result || d.message || d.content || (typeof d === 'string' ? d : null);
     
     if (typeof text === 'string' && text.includes("output_done")) {
