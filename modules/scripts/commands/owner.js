@@ -9,30 +9,20 @@ module.exports.config = {
   cooldown: 5,
 };
 
-// FIX: Added 'api'
-module.exports.run = async function ({ event, api }) {
+module.exports.run = async function ({ event, api, reply }) {
   const buttons = [
-    {
-      type: "web_url",
-      url: "https://www.facebook.com/seth09asher", 
-      title: "Add Seth"
-    },
-    {
-      type: "web_url",
-      url: "https://github.com/sethdico",
-      title: "GitHub"
-    }
+    { type: "web_url", url: "https://www.facebook.com/seth09asher", title: "Add Seth" },
+    { type: "web_url", url: "https://github.com/sethdico", title: "GitHub" }
   ];
 
   try {
-      // Now 'api' is defined and this will work
       await api.sendButton(
-        "👑 **Bot Owner**\n━━━━━━━━━━━━━━━━\nThis bot was created by Seth Asher Salinguhay.\nContact me for issues:",
+        "👑 **Bot Owner**\n━━━━━━━━━━━━━━━━\nThis bot was created by Seth Asher Salinguhay.",
         buttons,
         event.sender.id
       );
   } catch (e) {
-      // Fallback message if buttons fail
+      // Fallback if buttons fail
       api.sendMessage("👑 **Owner:** Seth Asher Salinguhay\nFB: facebook.com/seth09asher", event.sender.id);
   }
 };
