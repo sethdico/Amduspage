@@ -4,6 +4,8 @@ const handler = require("./handler");
 
 const tools = {};
 const srcPath = path.join(__dirname, "src");
+
+// Automatically loads every single tool you have in /src
 fs.readdirSync(srcPath).forEach(file => {
     if (file.endsWith(".js")) tools[path.parse(file).name] = require(`./src/${file}`);
 });
