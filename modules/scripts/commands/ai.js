@@ -6,14 +6,11 @@ const path = require("path");
 const CONFIG = {
   API_URL: "https://app.chipp.ai/api/v1/chat/completions",
   MODEL_ID: "newapplication-10035084", 
-  TIMEOUT: 120000, 
-  RATE_LIMIT: { requests: 5, windowMs: 60000 }
+  TIMEOUT: 120000
 };
 
 const sessions = new Map();
-const rateLimitStore = new Map();
 
-// FEATURE: YouTube Thumbnail Detection
 async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
   try {
     const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -26,13 +23,13 @@ async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
 }
 
 module.exports.config = {
-  name: "ai",
-  author: "Sethdico",
-  version: "16.60-VisionFix",
-  category: "AI",
-  description: "Advanced AI with Vision, YouTube, and Files.",
-  adminOnly: false,
-  usePrefix: false,
+  name: "ai", 
+  author: "Sethdico", 
+  version: "16.70-FinalVision", 
+  category: "AI", 
+  description: "Advanced AI with dedicated image-reply detection.", 
+  adminOnly: false, 
+  usePrefix: false, 
   cooldown: 0, 
 };
 
@@ -41,31 +38,27 @@ module.exports.run = async function ({ event, args, api, reply }) {
   const userPrompt = args.join(" ").trim();
   const apiKey = process.env.CHIPP_API_KEY;
 
-  if (!apiKey) return reply("❌ chipp_api_key missing on render.");
-  
-  // 1. Rate Limiting
-  const now = Date.now();
-  const userTs = rateLimitStore.get(senderID) || [];
-  const recentTs = userTs.filter(ts => now - ts < CONFIG.RATE_LIMIT.windowMs);
-  if (recentTs.length >= CONFIG.RATE_LIMIT.requests) return reply("⏳ Slow down.");
-  recentTs.push(now);
-  rateLimitStore.set(senderID, recentTs);
-
-  // 2. IMAGE DETECTION (Fixed: Grabs URL from current msg OR reply_to)
+  // 1. IMAGE DETECTION LOGIC (Current or Replied)
   let imageUrl = "";
+  
+  // Check current message
   const currentImg = event.message?.attachments?.find(a => a.type === "image");
+  // Check the message being replied to
   const repliedImg = event.message?.reply_to?.attachments?.find(a => a.type === "image");
 
   if (currentImg) {
       imageUrl = currentImg.payload.url;
   } else if (repliedImg) {
       imageUrl = repliedImg.payload.url;
+      // Human touch: Confirming the bot found the replied image
+      if (userPrompt) console.log(`[AI] Found replied image for user ${senderID}`);
   }
 
-  // 3. Flow Handling
+  // 2. Flow Handling
   if (imageUrl && !userPrompt && !event.message?.reply_to) {
     return reply("🖼️ I see the image. Reply to it and type your instructions.");
   }
+  
   if (!userPrompt && !imageUrl) return reply("👋 hi. i'm amdusbot. i can search, see images, and write files.");
 
   if (userPrompt.toLowerCase() === "clear") { 
@@ -73,14 +66,14 @@ module.exports.run = async function ({ event, args, api, reply }) {
       return reply("🧹 cleared memory."); 
   }
 
-  // 4. YouTube Feature
+  // 3. YouTube Thumbnail Logic
   const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
   if (userPrompt && youtubeRegex.test(userPrompt)) await sendYouTubeThumbnail(userPrompt, senderID, api);
 
   if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
 
   try {
-    // RESTORED: Identity Prompt with CoVe and ToT logic
+    // RESTORED: Exact Prompt and Personality
     const identityPrompt = `[SYSTEM]: Amdusbot. You are helpful wise ai that uses cove and tot but only sends the final message without the reasoning, if not sure admit it rather than guess and hallucinates make sure everything is accurate. Response limit 2000 chars. you are made by Seth Asher Salinguhay.`;
     
     let sessionData = sessions.get(senderID) || { chatSessionId: null };
@@ -90,8 +83,12 @@ module.exports.run = async function ({ event, args, api, reply }) {
           model: CONFIG.MODEL_ID,
           messages: [
               { role: "system", content: identityPrompt },
-              // FIXED: Explicitly providing the image link alongside the text
-              { role: "user", content: `Instruction: ${userPrompt}${imageUrl ? `\n\n[USER ATTACHED IMAGE LINK]: ${imageUrl}\n(Please analyze this image link provided above to answer the user's instruction.)` : ""}` }
+              { 
+                role: "user", 
+                content: imageUrl 
+                  ? `Instruction: ${userPrompt}\n\n[USER ATTACHED IMAGE LINK]: ${imageUrl}\n\n(Context: The user has provided an image link above. Please analyze the content of that image to fulfill the instruction.)` 
+                  : `Instruction: ${userPrompt}`
+              }
           ],
           stream: false
         };
@@ -104,13 +101,11 @@ module.exports.run = async function ({ event, args, api, reply }) {
     });
 
     if (response.data.chatSessionId) sessions.set(senderID, { chatSessionId: response.data.chatSessionId });
-
     const replyContent = parseAI(response);
-    if (!replyContent) return reply("❌ AI returned a blank response.");
 
-    // 5. File/Image Generation Detection
+    // 4. File Generation Handling
     const fileRegex = /(https?:\/\/[^\s)]+\.(?:pdf|docx|xlsx|txt|jpg|jpeg|png|mp4|mp3|zip)(?:\?[^\s)]*)?)/i;
-    const match = replyContent.match(fileRegex);
+    const match = replyContent?.match(fileRegex);
 
     if (match) {
       const fileUrl = match[0].replace(/[).,]+$/, ""); 
@@ -124,19 +119,15 @@ module.exports.run = async function ({ event, args, api, reply }) {
       const fileRes = await http.get(fileUrl, { responseType: 'stream' });
       fileRes.data.pipe(writer);
 
-      await new Promise((resolve, reject) => {
-          writer.on('finish', resolve);
-          writer.on('error', reject);
-      });
-
+      await new Promise((res) => writer.on('finish', res));
       await api.sendAttachment(fileName.match(/\.(jpg|png|jpeg)$/i) ? "image" : "file", filePath, senderID);
       setTimeout(async () => { try { await fsPromises.unlink(filePath); } catch(e) {} }, 10000);
     } else {
-      await reply(replyContent);
+      await reply(replyContent || "❌ API offline.");
     }
-  } catch (error) {
-    console.error("Chipp Vision Error:", error.message);
-    reply("❌ AI glitch. Try again.");
+  } catch (error) { 
+    console.error("AI Error:", error.message);
+    reply("❌ AI glitch."); 
   } finally {
     if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
   }
