@@ -50,7 +50,7 @@ const loadCommands = (dir) => {
             const maintStatus = await db.getSetting("maintenance");
             const maintReason = await db.getSetting("maintenance_reason");
             global.MAINTENANCE_MODE = maintStatus === "true";
-            global.MAINTENANCE_REASON = maintReason || "The owner is currently updating and fixing the bot.";
+            global.MAINTENANCE_REASON = maintReason || "Updating...";
             resolve();
         });
     });
@@ -68,8 +68,7 @@ const loadCommands = (dir) => {
     });
 
     app.post("/webhook", (req, res) => {
-        // FIXED: Send 200 immediately to stop Facebook from retrying and sending double messages
-        res.sendStatus(200); 
+        res.sendStatus(200); // Stops Facebook from retrying and sending double messages
         webhook.listen(req.body);
     });
 
