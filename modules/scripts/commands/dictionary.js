@@ -5,7 +5,7 @@ module.exports.config = {
     author: "Sethdico",
     version: "8.0",
     category: "Utility",
-    description: "Dictionary with Urban fallback and flow.",
+    description: "Dictionary with Merriam and Urban.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 3,
