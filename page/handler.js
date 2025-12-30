@@ -1,92 +1,76 @@
-const spamMap = new Map();
-const db = require("../modules/database");
+require('dotenv').config();
+const webhook = require("./webhook.js");
+const parser = require("body-parser");
+const express = require("express");
+const path = require("path");
+const fs = require('fs').promises;
+const db = require("./modules/database");
+const rateLimiter = require("./modules/rateLimiter");
+const config = require("./config.json");
 
-module.exports = async function (event, api) {
-    if (!event.sender?.id) return;
-    const senderID = event.sender.id;
-    const reply = (msg) => api.sendMessage(msg, senderID);
-    const isAdmin = global.ADMINS.has(senderID);
+const app = express();
+app.set('trust proxy', 1); 
 
-    // 1. SPEED FIX: Name Caching (Prioritizes performance)
-    let name = global.userCache.get(senderID);
-    if (!name) {
+global.PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN || config.PAGE_ACCESS_TOKEN;
+global.ADMINS = new Set(process.env.ADMINS ? process.env.ADMINS.split(",").filter(Boolean) : (config.ADMINS || []));
+global.PREFIX = process.env.PREFIX || config.PREFIX || ".";
+global.CACHE_PATH = path.join(__dirname, "cache");
+global.client = { commands: new Map(), aliases: new Map() };
+global.BANNED_USERS = new Set();
+global.sessions = new Map(); 
+global.userCache = new Map(); // Speed Fix
+
+const loadCommands = (dir) => {
+    const files = require("fs").readdirSync(dir);
+    files.forEach(file => {
+        const filePath = path.join(dir, file);
+        if (require("fs").statSync(filePath).isDirectory()) return loadCommands(filePath);
+        if (!file.endsWith(".js")) return;
         try {
-            const info = await api.getUserInfo(senderID);
-            name = `${info.first_name} ${info.last_name}`;
-            global.userCache.set(senderID, name);
-        } catch (e) { name = "User"; }
-    }
-
-    // 2. MAINTENANCE GATEKEEPER
-    if (global.MAINTENANCE_MODE && !isAdmin) {
-        return reply(`🛠️ **MAINTENANCE MODE**\n━━━━━━━━━━━━━━━━\n${global.MAINTENANCE_REASON}`);
-    }
-
-    // 3. WELCOME LOGIC (Get Started)
-    if (event.postback?.payload === "GET_STARTED_PAYLOAD") {
-        return reply(`👋 Hi ${name.split(" ")[0]}! Type 'help' to start.`);
-    }
-
-    if (event.message?.is_echo) return;
-    const body = (event.message?.text || event.postback?.payload || "").trim();
-    const hasAttachments = !!(event.message?.attachments);
-    if (!body && !hasAttachments) return;
-
-    // 4. FLOW AUTO-CATCH (Category Buttons)
-    const categories = ["AI", "FUN", "UTILITY", "ADMIN"];
-    const words = body.split(/\s+/);
-    if (words.length === 1 && categories.includes(body.toUpperCase())) {
-        const cat = body.toUpperCase();
-        if (cat === "ADMIN" && !isAdmin) return; // Silent block
-        let cmdNames = [];
-        for (const [n, cmd] of global.client.commands) {
-            if (cmd.config.category?.toUpperCase() === cat) cmdNames.push(n);
-        }
-        return reply(`📁 **${cat} COMMANDS:**\n━━━━━━━━━━━━━━━━\n${cmdNames.sort().join(", ")}\n\nType 'help <cmd>' for details.`);
-    }
-
-    // 5. COMMAND IDENTIFICATION
-    const cmdName = words.shift().toLowerCase();
-    const command = global.client.commands.get(cmdName) || global.client.commands.get(global.client.aliases.get(cmdName));
-
-    if (command) {
-        if (command.config.adminOnly && !isAdmin) return reply("⛔ Admin only.");
-        try {
-            db.trackCommand(cmdName, senderID, name);
-            await command.run({ event, args: words, api, reply });
-            return; // Command found, stop here.
-        } catch (e) {
-            console.error(e);
-            return reply(`❌ Error in ${cmdName}.`);
-        } finally {
-            if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
-        }
-    } 
-
-    // 6. ANTI-SPAM (Admins bypass this)
-    if (!isAdmin) {
-        let userData = spamMap.get(senderID) || { count: 0, time: Date.now() };
-        if (Date.now() - userData.time > 5000) { userData.count = 0; userData.time = Date.now(); }
-        userData.count++;
-        spamMap.set(senderID, userData);
-        if (userData.count === 11) return reply("⏳ Woah! Slow down a bit.");
-        if (userData.count > 10) return; 
-    }
-
-    // 7. AI FALLBACK (Only for normal conversation or image replies)
-    if ((body.length > 0 || hasAttachments) && !event.message?.is_echo) {
-        const ai = global.client.commands.get("ai");
-        const reactions = ["lol", "haha", "wow", "lmao", "ok", "okay", "?", "nice"];
-        
-        // Prevent AI from replying to short reactions or if command not found
-        if (ai && !reactions.includes(body.toLowerCase())) {
-            try {
-                if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
-                // Pass raw body to AI for full context
-                await ai.run({ event, args: body.split(/\s+/), api, reply });
-            } finally {
-                if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
+            const cmd = require(filePath);
+            if (cmd.config?.name) {
+                const name = cmd.config.name.toLowerCase();
+                global.client.commands.set(name, cmd);
+                if (cmd.config.aliases) cmd.config.aliases.forEach(a => global.client.aliases.set(a.toLowerCase(), name));
             }
-        }
-    }
+        } catch (e) {}
+    });
 };
+
+(async () => {
+    try { 
+        await require('fs').promises.mkdir(global.CACHE_PATH, { recursive: true });
+        const files = await fs.readdir(global.CACHE_PATH);
+        for (const file of files) await fs.unlink(path.join(global.CACHE_PATH, file));
+    } catch (e) {}
+
+    await new Promise(resolve => {
+        db.loadBansIntoMemory(async (banSet) => { 
+            global.BANNED_USERS = banSet; 
+            const maintStatus = await db.getSetting("maintenance");
+            const maintReason = await db.getSetting("maintenance_reason");
+            global.MAINTENANCE_MODE = maintStatus === "true";
+            global.MAINTENANCE_REASON = maintReason || "Updating...";
+            resolve();
+        });
+    });
+
+    loadCommands(path.join(__dirname, "modules/scripts/commands"));
+    app.use(parser.json({ limit: '20mb' }));
+    app.use(rateLimiter);
+
+    app.get("/", (req, res) => res.send("🟢 Amduspage System: Optimal"));
+    app.get("/webhook", (req, res) => {
+        const vToken = process.env.VERIFY_TOKEN || config.VERIFY_TOKEN;
+        if (req.query["hub.verify_token"] === vToken) res.status(200).send(req.query["hub.challenge"]);
+        else res.sendStatus(403);
+    });
+
+    app.post("/webhook", (req, res) => {
+        res.sendStatus(200); // FIX: Stop double-messages immediately
+        webhook.listen(req.body);
+    });
+
+    const PORT = process.env.PORT || 8080;
+    app.listen(PORT, () => console.log(`🚀 Online on port ${PORT}`));
+})();
