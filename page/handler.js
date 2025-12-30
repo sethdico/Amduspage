@@ -1,5 +1,6 @@
 const spamMap = new Map();
 const db = require("../modules/database");
+const { humanTyping } = require("../modules/utils");
 
 module.exports = async function (event, api) {
     if (!event.sender?.id) return;
@@ -7,8 +8,10 @@ module.exports = async function (event, api) {
     const reply = (msg) => api.sendMessage(msg, senderID);
     const isAdmin = global.ADMINS.has(senderID);
 
-    // 1. Maintenance & Welcome
-    if (global.MAINTENANCE_MODE && !isAdmin) return reply(`🛠️ **MAINTENANCE MODE**\n\n${global.MAINTENANCE_REASON}`);
+    if (global.MAINTENANCE_MODE && !isAdmin) {
+        return reply(`🛠️ **MAINTENANCE MODE**\n\n${global.MAINTENANCE_REASON}`);
+    }
+
     if (event.postback?.payload === "GET_STARTED_PAYLOAD") {
         const info = await api.getUserInfo(senderID);
         return reply(`👋 Hi ${info.first_name || "there"}! Type 'help' to start.`);
@@ -19,49 +22,45 @@ module.exports = async function (event, api) {
     const hasAttachments = !!(event.message?.attachments);
     if (!body && !hasAttachments) return;
 
-    // 2. FLOW AUTO-CATCH (Fixed Priority)
-    // If the message is EXACTLY a category name (1 word), show the list.
+    // FLOW AUTO-CATCH: Now uses Quick Replies for the commands themselves
     const categories = ["AI", "FUN", "UTILITY", "ADMIN"];
     const words = body.trim().split(/\s+/);
-    
     if (words.length === 1 && categories.includes(body.toUpperCase())) {
         const cat = body.toUpperCase();
-        let list = `📁 **${cat} COMMANDS:**\n━━━━━━━━━━━━━━━━\n`;
+        let cmdList = [];
         for (const [name, cmd] of global.client.commands) {
-            if (cmd.config.category?.toUpperCase() === cat) list += `• ${name}\n`;
+            if (cmd.config.category?.toUpperCase() === cat) cmdList.push(name);
         }
-        return reply(list); // Exit here, don't trigger the command or AI
+        return api.sendQuickReply(`📁 **${cat} COMMANDS:**\nTap one to run it:`, cmdList.slice(0, 10), senderID);
     }
 
-    // 3. Command Recognition Logic
-    const prefix = global.PREFIX || ".";
+    const prefix = global.PREFIX;
     const isPrefixed = body.startsWith(prefix);
     const input = isPrefixed ? body.slice(prefix.length).trim() : body.trim();
     const args = input.split(/\s+/);
     const cmdName = args.shift().toLowerCase();
 
-    const command = global.client.commands.get(cmdName) || 
-                    global.client.commands.get(global.client.aliases.get(cmdName));
+    const command = global.client.commands.get(cmdName) || global.client.commands.get(global.client.aliases.get(cmdName));
 
-    // 4. THE COMMAND GATE
     if (command) {
         if (command.config.adminOnly && !isAdmin) return reply("⛔ Admin only.");
         try {
             db.trackCommand(cmdName);
             await command.run({ event, args, api, reply });
-            return; 
         } catch (e) {
+            console.error(e);
             reply(`❌ Logic error in ${cmdName}.`);
-        } finally { if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID); }
-    } 
-
-    // 5. AI Fallback (With reaction filter)
-    else if ((body.length > 3 || hasAttachments) && !event.message?.is_echo) {
+        }
+    } else if ((body.length > 3 || hasAttachments) && !event.message?.is_echo) {
         const ai = global.client.commands.get("ai");
-        const reactions = ["lol", "haha", "wow", "lmao", "ok", "okay", "?", "nice"];
-        if (ai && !reactions.includes(body.toLowerCase())) {
-            try { await ai.run({ event, args: body.trim().split(/\s+/), api, reply }); }
-            finally { if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID); }
+        if (ai) {
+            try {
+                // Humanize: bot "types" before AI replies
+                await api.sendTypingIndicator(true, senderID);
+                await ai.run({ event, args: body.trim().split(/\s+/), api, reply });
+            } finally {
+                if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
+            }
         }
     }
 };
