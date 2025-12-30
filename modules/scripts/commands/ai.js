@@ -6,11 +6,14 @@ const path = require("path");
 const CONFIG = {
   API_URL: "https://app.chipp.ai/api/v1/chat/completions",
   MODEL_ID: "newapplication-10035084", 
-  TIMEOUT: 120000
+  TIMEOUT: 120000,
+  RATE_LIMIT: { requests: 5, windowMs: 60000 }
 };
 
 const sessions = new Map();
+const rateLimitStore = new Map();
 
+// FEATURE: YouTube Thumbnail Detection
 async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
   try {
     const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -25,9 +28,9 @@ async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
 module.exports.config = {
   name: "ai", 
   author: "Sethdico", 
-  version: "16.70-FinalVision", 
+  version: "16.80-VisionDirect", 
   category: "AI", 
-  description: "Advanced AI with dedicated image-reply detection.", 
+  description: "Advanced AI with direct image-link injection.", 
   adminOnly: false, 
   usePrefix: false, 
   cooldown: 0, 
@@ -38,57 +41,59 @@ module.exports.run = async function ({ event, args, api, reply }) {
   const userPrompt = args.join(" ").trim();
   const apiKey = process.env.CHIPP_API_KEY;
 
-  // 1. IMAGE DETECTION LOGIC (Current or Replied)
-  let imageUrl = "";
+  if (!apiKey) return reply("❌ chipp_api_key missing on render.");
   
-  // Check current message
+  // 1. Rate Limiting
+  const now = Date.now();
+  const userTs = rateLimitStore.get(senderID) || [];
+  const recentTs = userTs.filter(ts => now - ts < CONFIG.RATE_LIMIT.windowMs);
+  if (recentTs.length >= CONFIG.RATE_LIMIT.requests) return reply("⏳ Slow down.");
+  recentTs.push(now);
+  rateLimitStore.set(senderID, recentTs);
+
+  // 2. IMAGE DETECTION (Direct URL extraction)
+  let imageUrl = "";
   const currentImg = event.message?.attachments?.find(a => a.type === "image");
-  // Check the message being replied to
   const repliedImg = event.message?.reply_to?.attachments?.find(a => a.type === "image");
 
   if (currentImg) {
       imageUrl = currentImg.payload.url;
   } else if (repliedImg) {
       imageUrl = repliedImg.payload.url;
-      // Human touch: Confirming the bot found the replied image
-      if (userPrompt) console.log(`[AI] Found replied image for user ${senderID}`);
   }
 
-  // 2. Flow Handling
+  // 3. Logic Flow
   if (imageUrl && !userPrompt && !event.message?.reply_to) {
     return reply("🖼️ I see the image. Reply to it and type your instructions.");
   }
-  
   if (!userPrompt && !imageUrl) return reply("👋 hi. i'm amdusbot. i can search, see images, and write files.");
 
-  if (userPrompt.toLowerCase() === "clear") { 
+  if (userPrompt.toLowerCase() === "Aiclear") { 
       sessions.delete(senderID); 
       return reply("🧹 cleared memory."); 
   }
 
-  // 3. YouTube Thumbnail Logic
+  // 4. YouTube Thumbnail Logic
   const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
   if (userPrompt && youtubeRegex.test(userPrompt)) await sendYouTubeThumbnail(userPrompt, senderID, api);
 
   if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
 
   try {
-    // RESTORED: Exact Prompt and Personality
+    // RESTORED: Identity Prompt
     const identityPrompt = `[SYSTEM]: Amdusbot. You are helpful wise ai that uses cove and tot but only sends the final message without the reasoning, if not sure admit it rather than guess and hallucinates make sure everything is accurate. Response limit 2000 chars. you are made by Seth Asher Salinguhay.`;
     
     let sessionData = sessions.get(senderID) || { chatSessionId: null };
 
     const response = await fetchWithRetry(async () => {
+        // CONSTRUCTING THE DIRECT INPUT (URL + TEXT)
+        const finalInput = imageUrl ? `${imageUrl}\n\n${userPrompt}` : userPrompt;
+
         const body = {
           model: CONFIG.MODEL_ID,
           messages: [
               { role: "system", content: identityPrompt },
-              { 
-                role: "user", 
-                content: imageUrl 
-                  ? `Instruction: ${userPrompt}\n\n[USER ATTACHED IMAGE LINK]: ${imageUrl}\n\n(Context: The user has provided an image link above. Please analyze the content of that image to fulfill the instruction.)` 
-                  : `Instruction: ${userPrompt}`
-              }
+              { role: "user", content: finalInput }
           ],
           stream: false
         };
@@ -103,7 +108,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
     if (response.data.chatSessionId) sessions.set(senderID, { chatSessionId: response.data.chatSessionId });
     const replyContent = parseAI(response);
 
-    // 4. File Generation Handling
+    // 5. File/Image Generation Logic
     const fileRegex = /(https?:\/\/[^\s)]+\.(?:pdf|docx|xlsx|txt|jpg|jpeg|png|mp4|mp3|zip)(?:\?[^\s)]*)?)/i;
     const match = replyContent?.match(fileRegex);
 
@@ -119,7 +124,11 @@ module.exports.run = async function ({ event, args, api, reply }) {
       const fileRes = await http.get(fileUrl, { responseType: 'stream' });
       fileRes.data.pipe(writer);
 
-      await new Promise((res) => writer.on('finish', res));
+      await new Promise((resolve, reject) => {
+          writer.on('finish', resolve);
+          writer.on('error', reject);
+      });
+
       await api.sendAttachment(fileName.match(/\.(jpg|png|jpeg)$/i) ? "image" : "file", filePath, senderID);
       setTimeout(async () => { try { await fsPromises.unlink(filePath); } catch(e) {} }, 10000);
     } else {
