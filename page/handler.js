@@ -1,6 +1,5 @@
 const spamMap = new Map();
 const db = require("../modules/database");
-const { humanTyping } = require("../modules/utils");
 
 module.exports = async function (event, api) {
     if (!event.sender?.id) return;
@@ -8,10 +7,7 @@ module.exports = async function (event, api) {
     const reply = (msg) => api.sendMessage(msg, senderID);
     const isAdmin = global.ADMINS.has(senderID);
 
-    if (global.MAINTENANCE_MODE && !isAdmin) {
-        return reply(`🛠️ **MAINTENANCE MODE**\n\n${global.MAINTENANCE_REASON}`);
-    }
-
+    // 1. Welcome Logic
     if (event.postback?.payload === "GET_STARTED_PAYLOAD") {
         const info = await api.getUserInfo(senderID);
         return reply(`👋 Hi ${info.first_name || "there"}! Type 'help' to start.`);
@@ -22,18 +18,26 @@ module.exports = async function (event, api) {
     const hasAttachments = !!(event.message?.attachments);
     if (!body && !hasAttachments) return;
 
-    // FLOW AUTO-CATCH: Now uses Quick Replies for the commands themselves
-    const categories = ["AI", "FUN", "UTILITY", "ADMIN"];
-    const words = body.trim().split(/\s+/);
-    if (words.length === 1 && categories.includes(body.toUpperCase())) {
-        const cat = body.toUpperCase();
-        let cmdList = [];
-        for (const [name, cmd] of global.client.commands) {
-            if (cmd.config.category?.toUpperCase() === cat) cmdList.push(name);
-        }
-        return api.sendQuickReply(`📁 **${cat} COMMANDS:**\nTap one to run it:`, cmdList.slice(0, 10), senderID);
+    // 2. Maintenance Gatekeeper
+    if (global.MAINTENANCE_MODE && !isAdmin) {
+        return reply(`🛠️ **MAINTENANCE MODE**\n━━━━━━━━━━━━━━━━\n${global.MAINTENANCE_REASON}`);
     }
 
+    // 3. FLOW AUTO-CATCH (Fixed: Returns text list instead of bubbles)
+    const categories = ["AI", "FUN", "UTILITY", "ADMIN"];
+    const words = body.trim().split(/\s+/);
+    
+    if (words.length === 1 && categories.includes(body.toUpperCase())) {
+        const cat = body.toUpperCase();
+        let cmdNames = [];
+        for (const [name, cmd] of global.client.commands) {
+            if (cmd.config.category?.toUpperCase() === cat) cmdNames.push(name);
+        }
+        let listMsg = `📁 **${cat} COMMANDS:**\n━━━━━━━━━━━━━━━━\n${cmdNames.sort().join(", ")}\n\nType 'help <cmd>' for details.`;
+        return reply(listMsg); 
+    }
+
+    // 4. Command Logic (Prefix-Free)
     const prefix = global.PREFIX;
     const isPrefixed = body.startsWith(prefix);
     const input = isPrefixed ? body.slice(prefix.length).trim() : body.trim();
@@ -47,16 +51,22 @@ module.exports = async function (event, api) {
         try {
             db.trackCommand(cmdName);
             await command.run({ event, args, api, reply });
+            return;
         } catch (e) {
             console.error(e);
             reply(`❌ Logic error in ${cmdName}.`);
+        } finally {
+            if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
         }
-    } else if ((body.length > 3 || hasAttachments) && !event.message?.is_echo) {
+    } 
+
+    // 5. AI Fallback (With reaction filter)
+    else if ((body.length > 3 || hasAttachments) && !event.message?.is_echo) {
         const ai = global.client.commands.get("ai");
-        if (ai) {
+        const reactions = ["lol", "haha", "wow", "lmao", "ok", "okay", "?", "nice"];
+        if (ai && !reactions.includes(body.toLowerCase())) {
             try {
-                // Humanize: bot "types" before AI replies
-                await api.sendTypingIndicator(true, senderID);
+                if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
                 await ai.run({ event, args: body.trim().split(/\s+/), api, reply });
             } finally {
                 if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
