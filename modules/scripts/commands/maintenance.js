@@ -19,7 +19,7 @@ module.exports.run = async function ({ args, reply }) {
     if (action === "off") {
         global.MAINTENANCE_MODE = false;
         await db.setSetting("maintenance", "false");
-        return reply("✅ **Maintenance Mode: OFF**\nBot is now Public.");
+        return reply("✅ **Maintenance Mode: OFF**");
     }
 
     reply(`🛠️ Status: ${global.MAINTENANCE_MODE ? "ON" : "OFF"}\nReason: ${global.MAINTENANCE_REASON}`);
