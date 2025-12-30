@@ -15,7 +15,7 @@ async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
 }
 
 module.exports.config = {
-  name: "ai", author: "Sethdico", version: "16.40", category: "AI", description: "Advanced AI.", adminOnly: false, usePrefix: false, cooldown: 0, 
+  name: "ai", author: "Sethdico", version: "16.50", category: "AI", description: "Advanced AI.", adminOnly: false, usePrefix: false, cooldown: 0, 
 };
 
 module.exports.run = async function ({ event, args, api, reply }) {
@@ -24,11 +24,8 @@ module.exports.run = async function ({ event, args, api, reply }) {
   const apiKey = process.env.CHIPP_API_KEY;
 
   let imageUrl = event.message?.attachments?.[0]?.payload?.url || event.message?.reply_to?.attachments?.[0]?.payload?.url || "";
-
-  if (imageUrl && !userPrompt && event.message?.attachments) {
-    return reply("🖼️ I see the image. Reply to it and type your instructions.");
-  }
-  if (!userPrompt && !imageUrl) return reply("👋 hi. i'm amdusbot. ask me anything.");
+  if (imageUrl && !userPrompt && event.message?.attachments) return reply("🖼️ I see the image. Reply to it and type your instructions.");
+  if (!userPrompt && !imageUrl) return reply("👋 hi. i'm amdusbot. i can search, see images, and write files.");
 
   const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
   if (userPrompt && youtubeRegex.test(userPrompt)) await sendYouTubeThumbnail(userPrompt, senderID, api);
@@ -40,15 +37,9 @@ module.exports.run = async function ({ event, args, api, reply }) {
     let sessionData = (global.sessions || (global.sessions = new Map())).get(senderID) || { chatSessionId: null };
 
     const response = await fetchWithRetry(async () => {
-        const body = {
-          model: "newapplication-10035084",
-          messages: [{ role: "system", content: identityPrompt }, { role: "user", content: `Input: ${userPrompt}\n${imageUrl ? `[IMAGE]: ${imageUrl}` : ""}` }],
-          stream: false
-        };
+        const body = { model: "newapplication-10035084", messages: [{ role: "system", content: identityPrompt }, { role: "user", content: `Input: ${userPrompt}\n${imageUrl ? `[IMAGE]: ${imageUrl}` : ""}` }], stream: false };
         if (sessionData.chatSessionId) body.chatSessionId = sessionData.chatSessionId;
-        return http.post("https://app.chipp.ai/api/v1/chat/completions", body, { 
-            headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" }
-        });
+        return http.post("https://app.chipp.ai/api/v1/chat/completions", body, { headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" } });
     });
 
     if (response.data.chatSessionId) global.sessions.set(senderID, { chatSessionId: response.data.chatSessionId });
@@ -59,9 +50,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
     if (match) {
       const fileUrl = match[0].replace(/[).,]+$/, ""); 
-      const textPart = replyContent.replace(match[0], "").trim();
-      if (textPart) await reply(textPart);
-
+      if (replyContent.replace(match[0], "").trim()) await reply(replyContent.replace(match[0], "").trim());
       const fileName = `file_${Date.now()}${path.extname(fileUrl.split('?')[0]) || '.bin'}`;
       const filePath = path.join(global.CACHE_PATH, fileName);
       const writer = fs.createWriteStream(filePath);
@@ -70,8 +59,6 @@ module.exports.run = async function ({ event, args, api, reply }) {
       await new Promise((res) => writer.on('finish', res));
       await api.sendAttachment(fileName.match(/\.(jpg|png|jpeg)$/i) ? "image" : "file", filePath, senderID);
       setTimeout(async () => { try { await fsPromises.unlink(filePath); } catch(e) {} }, 10000);
-    } else {
-      await reply(replyContent || "❌ API offline.");
-    }
+    } else { await reply(replyContent || "❌ API offline."); }
   } catch (error) { reply("❌ AI glitch."); }
 };
