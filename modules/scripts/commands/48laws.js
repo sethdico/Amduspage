@@ -20,9 +20,9 @@ const LAWS = [
 module.exports.config = {
     name: "48laws",
     author: "Sethdico",
-    version: "1.2",
+    version: "2.0",
     category: "Fun",
-    description: "Random Law of Power.",
+    description: "Random Law of Power with flow logic.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 2,
@@ -34,9 +34,10 @@ module.exports.run = async function ({ event, args, api }) {
 
     const msg = `📖 **Law #${num}**\n━━━━━━━━━━━━━━━━\n${LAWS[num-1]}`;
     
-    // Fallback to text if buttons fail
+    // Flow: Payload "48laws" picks a new random law instantly
+    const buttons = [{ type: "postback", title: "🎲 Another Law", payload: "48laws" }];
+    
     try {
-        const buttons = [{ type: "postback", title: "🎲 Another Law", payload: "48laws" }];
         await api.sendButton(msg, buttons, event.sender.id);
     } catch (e) {
         api.sendMessage(msg, event.sender.id);
