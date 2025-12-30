@@ -11,15 +11,14 @@ const config = require("./config.json");
 const app = express();
 app.set('trust proxy', 1); 
 
-// Global System Variables
 global.PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN || config.PAGE_ACCESS_TOKEN;
 global.ADMINS = new Set(process.env.ADMINS ? process.env.ADMINS.split(",").filter(Boolean) : (config.ADMINS || []));
 global.PREFIX = process.env.PREFIX || config.PREFIX || ".";
 global.CACHE_PATH = path.join(__dirname, "cache");
 global.client = { commands: new Map(), aliases: new Map() };
 global.BANNED_USERS = new Set();
-global.sessions = new Map(); // Global AI Session Memory
-global.userCache = new Map(); // Global Name Cache (Speed Fix)
+global.sessions = new Map();
+global.userCache = new Map();
 
 const loadCommands = (dir) => {
     const files = require("fs").readdirSync(dir);
@@ -39,15 +38,12 @@ const loadCommands = (dir) => {
 };
 
 (async () => {
-    // 1. Root Cache Cleanup
     try { 
         await require('fs').promises.mkdir(global.CACHE_PATH, { recursive: true });
         const files = await fs.readdir(global.CACHE_PATH);
         for (const file of files) await fs.unlink(path.join(global.CACHE_PATH, file));
     } catch (e) {}
 
-    // 2. Wait for Cloud Database Sync (CRITICAL FIX)
-    console.log("☁️ Syncing with MongoDB Atlas...");
     await new Promise(resolve => {
         db.loadBansIntoMemory(async (banSet) => { 
             global.BANNED_USERS = banSet; 
@@ -64,22 +60,19 @@ const loadCommands = (dir) => {
     app.use(parser.json({ limit: '20mb' }));
     app.use(rateLimiter);
 
-    app.get("/", (req, res) => res.send("🟢 System Optimal: Cloud Linked"));
+    app.get("/", (req, res) => res.send("🟢 System Optimal"));
     app.get("/webhook", (req, res) => {
         const vToken = process.env.VERIFY_TOKEN || config.VERIFY_TOKEN;
         if (req.query["hub.verify_token"] === vToken) res.status(200).send(req.query["hub.challenge"]);
         else res.sendStatus(403);
     });
-    app.post("/webhook", (req, res) => { webhook.listen(req.body); res.sendStatus(200); });
 
-    // Autoclean cache every 1 hour
-    setInterval(async () => {
-        try {
-            const files = await fs.readdir(global.CACHE_PATH);
-            for (const file of files) if (file !== '.gitkeep') await fs.unlink(path.join(global.CACHE_PATH, file));
-        } catch (e) {}
-    }, 3600000);
+    app.post("/webhook", (req, res) => {
+        // FIXED: Send 200 immediately to stop Facebook from retrying and sending double messages
+        res.sendStatus(200); 
+        webhook.listen(req.body);
+    });
 
     const PORT = process.env.PORT || 8080;
-    app.listen(PORT, () => console.log(`🚀 System Online on port ${PORT}`));
+    app.listen(PORT, () => console.log(`🚀 Online on port ${PORT}`));
 })();
