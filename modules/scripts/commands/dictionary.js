@@ -1,24 +1,29 @@
-const { http, parseAI } = require("../../utils");
+const { http } = require("../../utils");
 
 module.exports.config = {
-    name: "dict", author: "Sethdico", version: "9.0", category: "Utility", description: "Dictionary with Lite buttons.", adminOnly: false, usePrefix: false, cooldown: 3,
+    name: "dict", author: "Sethdico", version: "11.0", category: "Utility", description: "Dictionary with flow.", adminOnly: false, usePrefix: false, cooldown: 3,
 };
 
 module.exports.run = async function ({ event, args, api, reply }) {
-    let input = args.join(" ").trim();
-    if (!input) return reply("📖 Usage: dict <word>");
+    const isSlang = args[0]?.toLowerCase() === "slang";
+    const query = isSlang ? args.slice(1).join(" ") : args.join(" ");
+
+    if (!query) return reply("📖 Usage: dict <word>");
+
+    if (isSlang) {
+        try {
+            const res = await http.get(`https://api.urbandictionary.com/v0/define?term=${encodeURIComponent(query)}`);
+            const entry = res.data.list[0];
+            if (!entry) return reply(`❌ No slang found for "${query}".`);
+            return api.sendButton(`🛹 **URBAN: ${query.toUpperCase()}**\n\n${entry.definition.replace(/[\[\]]/g, "")}`, [{ title: "Formal Dict", payload: `dict ${query}` }], event.sender.id);
+        } catch (e) { return reply("❌ Urban Dictionary offline."); }
+    }
 
     try {
-        const res = await http.get(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(input)}`);
-        const data = res.data[0];
-        const def = data.meanings[0].definitions[0].definition;
-        
-        const msg = `📖 **${data.word.toUpperCase()}**\n${def}`;
-        const buttons = [{ type: "postback", title: "🛹 Urban Slang", payload: `dict slang ${data.word}` }];
-
-        return api.sendButton(msg, buttons, event.sender.id);
+        const res = await http.get(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(query)}`);
+        const def = res.data[0].meanings[0].definitions[0].definition;
+        return api.sendButton(`📖 **${query.toUpperCase()}**\n\n${def}`, [{ title: "Urban Slang", payload: `dict slang ${query}` }], event.sender.id);
     } catch (e) {
-        // Simple text fallback if API fails
-        reply(`❌ No definition found for "${input}".`);
+        reply(`❌ No definition for "${query}".`);
     }
 };
