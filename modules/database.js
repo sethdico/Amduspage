@@ -8,16 +8,7 @@ if (uri) {
 }
 
 const BanSchema = new mongoose.Schema({ userId: { type: String, unique: true } });
-
-// IMPROVED SCHEMA: Added 'expires' index. 
-// This tells MongoDB to delete the reminder automatically when it reaches fireAt.
-const ReminderSchema = new mongoose.Schema({ 
-    id: String, 
-    userId: String, 
-    message: String, 
-    fireAt: { type: Date, expires: 0 } 
-});
-
+const ReminderSchema = new mongoose.Schema({ id: String, userId: String, message: String, fireAt: { type: Date, expires: 0 } });
 const SettingSchema = new mongoose.Schema({ key: { type: String, unique: true }, value: String });
 const StatsSchema = new mongoose.Schema({ command: { type: String, unique: true }, count: { type: Number, default: 0 } });
 const UserStatsSchema = new mongoose.Schema({ userId: { type: String, unique: true }, name: String, count: { type: Number, default: 0 } });
@@ -35,7 +26,7 @@ module.exports = {
         const rows = await Ban.find({});
         cb(new Set(rows.map(r => r.userId)));
     },
-    addReminder: (r) => Reminder.create({ ...r, fireAt: new Date(r.fireAt) }), // Convert to Date for TTL
+    addReminder: (r) => Reminder.create({ ...r, fireAt: new Date(r.fireAt) }),
     deleteReminder: (id) => Reminder.deleteOne({ id }),
     getActiveReminders: async (cb) => {
         const rows = await Reminder.find({ fireAt: { $gt: new Date() } });
