@@ -3,28 +3,26 @@ const { http } = require("../../utils");
 module.exports.config = {
     name: "wolfram",
     author: "Sethdico",
-    version: "4.2-Fast",
+    version: "5.0",
     category: "Utility",
-    description: "Solves math and science questions.",
+    description: "Solve math/science with cross-search.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
 };
 
-module.exports.run = async function ({ event, args, api }) {
+module.exports.run = async function ({ event, args, api, reply }) {
     const input = args.join(" ");
-    const senderID = event.sender.id;
+    const id = event.sender.id;
 
-    if (!input) return api.sendMessage("🧮 Usage: wolfram <query>", senderID);
+    if (!input) return reply("🧮 Usage: wolfram <query>");
     
-    if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID).catch(() => {});
-
-    const APP_ID = process.env.WOLFRAM_APP_ID;
+    api.sendTypingIndicator(true, id);
 
     try {
         const response = await http.get(`https://api.wolframalpha.com/v2/query`, {
             params: {
-                appid: APP_ID,
+                appid: process.env.WOLFRAM_APP_ID,
                 input: input,
                 output: "json",
                 format: "plaintext,image",
@@ -32,61 +30,25 @@ module.exports.run = async function ({ event, args, api }) {
         });
 
         const res = response.data.queryresult;
+        if (!res.success) return reply("❌ Wolfram couldn't solve that.");
 
-        if (!res.success || res.error) {
-            return api.sendMessage("❌ Wolfram couldn't solve that.", senderID);
+        let resultText = "";
+        let pods = res.pods || [];
+        
+        for (const pod of pods.slice(0, 3)) {
+            resultText += `📍 **${pod.title}**\n${pod.subpods[0].plaintext}\n\n`;
         }
 
-        let interpretation = "";
-        let primaryResult = "";
-        let extendedData = [];
-        let images = [];
+        const msg = `🧮 **WOLFRAM RESULT**\n━━━━━━━━━━━━━━━━\n${resultText.trim()}`;
+        await api.sendMessage(msg, id);
 
-        // Parse the weird Wolfram structure
-        if (res.pods) {
-            for (const pod of res.pods) {
-                const title = pod.title || "Info";
-                const subpod = pod.subpods[0];
-                const text = subpod?.plaintext;
-                const imgSrc = subpod?.img?.src;
-
-                // Collect graphs
-                if (imgSrc && (title.includes("Plot") || title.includes("Graph") || title.includes("Map"))) {
-                    images.push(imgSrc);
-                }
-
-                if (!text) continue;
-
-                if (title === "Input interpretation" || title === "Input") {
-                    interpretation = text;
-                } else if (pod.primary || title === "Result") {
-                    primaryResult = text;
-                } else {
-                    extendedData.push(`📍 **${title}**\n${text}`);
-                }
-            }
-        }
-
-        let fullReport = `🧮 **WOLFRAM**\n━━━━━━━━━━━━━━━━\n`;
-        fullReport += `📥 **Q:** ${interpretation || input}\n\n`;
-        fullReport += `📤 **A:**\n${primaryResult || "See details below."}\n\n`;
-
-        if (extendedData.length > 0) {
-            fullReport += `━━━━━━━━━━━━━━━━\n${extendedData.join("\n\n")}`;
-        }
-
-        await api.sendMessage(fullReport, senderID);
-
-        // Send graphs if we found any
-        if (images.length > 0) {
-            for (const img of images.slice(0, 2)) {
-                await api.sendAttachment("image", img, senderID);
-            }
-        }
+        // Flow: Offer to search the same thing elsewhere if it's too complex
+        const flows = ["Wiki", "Google", "Help"];
+        return api.sendQuickReply("💡 Still confused? Try searching here:", flows, id);
 
     } catch (e) {
-        api.sendMessage("❌ Wolfram is currently unavailable.", senderID);
+        reply("❌ Wolfram is currently unavailable.");
     } finally {
-        if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID).catch(() => {});
+        api.sendTypingIndicator(false, id);
     }
 };
