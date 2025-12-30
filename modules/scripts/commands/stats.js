@@ -1,14 +1,8 @@
 const os = require('os');
+const db = require("../../database");
 
 module.exports.config = {
-    name: "stats",
-    author: "Sethdico",
-    version: "1.2",
-    category: "Admin",
-    description: "check bot health.",
-    adminOnly: true,
-    usePrefix: false,
-    cooldown: 5
+    name: "stats", author: "Sethdico", version: "2.0", category: "Admin", description: "check bot health and usage stats.", adminOnly: true, usePrefix: false, cooldown: 5
 };
 
 module.exports.run = async function ({ reply }) {
@@ -17,20 +11,22 @@ module.exports.run = async function ({ reply }) {
     const hrs = Math.floor(uptime / 3600);
     const mins = Math.floor((uptime % 3600) / 60);
 
-    const msg = `📊 **stats**
+    // Get usage stats from DB
+    const topCmds = await db.getStats();
+    const usageMsg = topCmds.slice(0, 5).map(c => `• ${c.command}: ${c.count}`).join("\n") || "No data yet.";
+
+    const msg = `📊 **SYSTEM STATS**
 ━━━━━━━━━━━━━━━━
-🤖 **cmds:** ${global.client.commands.size}
-🛡️ **admins:** ${global.ADMINS.size}
-🚫 **banned:** ${global.BANNED_USERS.size}
+🤖 **CMDS:** ${global.client.commands.size}
+🛡️ **ADMINS:** ${global.ADMINS.size}
+🚫 **BANNED:** ${global.BANNED_USERS.size}
 
-🧠 **memory**
-• used: ${(mem.heapUsed / 1024 / 1024).toFixed(2)} MB
-• total: ${(mem.heapTotal / 1024 / 1024).toFixed(2)} MB
+📈 **TOP USAGE:**
+${usageMsg}
 
-🖥️ **system**
-• load: ${os.loadavg()[0].toFixed(2)}
-• uptime: ${hrs}h ${mins}m
-• platform: ${os.platform()}`;
+🧠 **MEMORY:** ${(mem.heapUsed / 1024 / 1024).toFixed(2)} MB
+🖥️ **UPTIME:** ${hrs}h ${mins}m
+📡 **PLATFORM:** ${os.platform()}`;
 
     reply(msg);
 };
