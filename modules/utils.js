@@ -10,8 +10,17 @@ const http = axios.create({
 const parseAI = (res) => {
     if (!res || !res.data) return null;
     const d = res.data;
+    
+    // check nested standard choices
     if (d.choices?.[0]?.message?.content) return d.choices[0].message.content;
-    let text = d.answer || d.response || d.result || d.message || d.content || (typeof d === 'string' ? d : null);
+    
+    // check for common response fields
+    let text = d.answer || d.response || d.result || d.message || d.content;
+    
+    // if its just a string, return it
+    if (typeof d === 'string') text = d;
+
+    // clean up SSE junk
     if (typeof text === 'string' && text.includes("output_done")) {
         const match = text.match(/"text":"(.*?)"/);
         if (match) text = match[1].replace(/\\n/g, '\n');
@@ -22,14 +31,12 @@ const parseAI = (res) => {
 function log(event) {
     if (event.message?.is_echo || !event.sender) return;
     const senderType = global.ADMINS?.has(event.sender.id) ? "ADMIN" : "USER";
-    console.log(`[${senderType}] ${event.sender.id}: ${event.message?.text || "Media"}`);
+    global.log.info(`[${senderType}] ${event.sender.id}: ${event.message?.text || "Media"}`);
 }
 
-// FIXED: Proper reply detection
 function getEventType(event) {
     if (event.postback) return "postback";
     if (event.message) {
-        // Check for reply_to FIRST before checking attachments
         if (event.message.reply_to) return "message_reply";
         if (event.message.attachments) return "attachment";
         return "text"; 
@@ -39,8 +46,11 @@ function getEventType(event) {
 
 async function fetchWithRetry(requestFn, retries = 3) {
     for (let i = 0; i < retries; i++) {
-        try { return await requestFn(); } catch (error) {
+        try { 
+            return await requestFn(); 
+        } catch (error) {
             if (i === retries - 1) throw error;
+            // exponential backoff
             await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
         }
     }
