@@ -25,7 +25,14 @@ async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
 }
 
 module.exports.config = {
-  name: "ai", author: "Sethdico", version: "16.25-PromptRestored", category: "AI", description: "chat, vision, youtube, files.", adminOnly: false, usePrefix: false, cooldown: 0, 
+  name: "ai",
+  author: "Sethdico",
+  version: "16.30-Flow",
+  category: "AI",
+  description: "Advanced AI with Image Reply Flow.",
+  adminOnly: false,
+  usePrefix: false,
+  cooldown: 0, 
 };
 
 module.exports.run = async function ({ event, args, api, reply }) {
@@ -35,6 +42,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
   if (!apiKey) return reply("❌ chipp_api_key missing on render.");
   
+  // 1. Rate Limiting
   const now = Date.now();
   const userTs = rateLimitStore.get(senderID) || [];
   const recentTs = userTs.filter(ts => now - ts < CONFIG.RATE_LIMIT.windowMs);
@@ -42,19 +50,40 @@ module.exports.run = async function ({ event, args, api, reply }) {
   recentTs.push(now);
   rateLimitStore.set(senderID, recentTs);
 
-  let imageUrl = event.message?.attachments?.[0]?.payload?.url || event.message?.reply_to?.attachments?.[0]?.payload?.url || "";
+  // 2. Image Detection (Current or Reply)
+  let imageUrl = "";
+  const currentAttachments = event.message?.attachments;
+  const replyAttachments = event.message?.reply_to?.attachments;
 
-  if (userPrompt.toLowerCase() === "clear") { sessions.delete(senderID); return reply("🧹 cleared memory."); }
-  if (!!event.message?.sticker_id && !userPrompt) return; 
-  if (!userPrompt && !imageUrl) return reply("👋 hi. i'm amdusbot. i can search, see images, and write files.");
+  if (currentAttachments?.[0]?.type === "image") {
+    imageUrl = currentAttachments[0].payload.url;
+  } else if (replyAttachments?.[0]?.type === "image") {
+    imageUrl = replyAttachments[0].payload.url;
+  }
 
+  // 3. THE FLOW LOGIC
+  // Case A: User sent an image but NO text (Initial Step)
+  if (imageUrl && !userPrompt && currentAttachments) {
+    return reply("🖼️ I see the image. Reply to it and type your instructions.");
+  }
+
+  // Case B: General help (No image, no text)
+  if (!userPrompt && !imageUrl) {
+    return reply("👋 hi. i'm amdusbot. i can search, see images, and write files.");
+  }
+
+  if (userPrompt.toLowerCase() === "clear") { 
+      sessions.delete(senderID); 
+      return reply("🧹 cleared memory."); 
+  }
+
+  // 4. YouTube Feature
   const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
   if (userPrompt && youtubeRegex.test(userPrompt)) await sendYouTubeThumbnail(userPrompt, senderID, api);
 
   if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
 
   try {
-    // RESTORED: YOUR EXACT PROMPT
     const identityPrompt = `[SYSTEM]: Amdusbot. You are helpful wise ai that uses cove and tot but only sends the final message without the reasoning, if not sure admit it rather than guess and hallucinates make sure everything is accurate. Response limit 2000 chars. you are made by Seth Asher Salinguhay.`;
     
     let sessionData = sessions.get(senderID) || { chatSessionId: null };
@@ -63,8 +92,8 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const body = {
           model: CONFIG.MODEL_ID,
           messages: [
-              { role: "system", content: identityPrompt }, // Personality is set here
-              { role: "user", content: `Input: ${userPrompt}\n${imageUrl ? `[IMAGE URL]: ${imageUrl}` : ""}` }
+              { role: "system", content: identityPrompt },
+              { role: "user", content: `Input: ${userPrompt}\n${imageUrl ? `[ATTACHED IMAGE URL]: ${imageUrl}` : ""}` }
           ],
           stream: false
         };
@@ -79,9 +108,9 @@ module.exports.run = async function ({ event, args, api, reply }) {
     if (response.data.chatSessionId) sessions.set(senderID, { chatSessionId: response.data.chatSessionId });
 
     const replyContent = parseAI(response);
+    if (!replyContent) return reply("❌ AI returned a blank response.");
 
-    if (!replyContent) return reply("❌ AI returned an empty response.");
-
+    // 5. File Detection and Sending
     const fileRegex = /(https?:\/\/[^\s)]+\.(?:pdf|docx|xlsx|txt|jpg|jpeg|png|mp4|mp3|zip)(?:\?[^\s)]*)?)/i;
     const match = replyContent.match(fileRegex);
 
@@ -106,7 +135,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
   } catch (error) {
     const errMsg = error.response?.data?.error || error.message;
     console.error("Chipp Error:", errMsg);
-    reply(`❌ AI glitch: ${typeof errMsg === 'string' ? errMsg : 'API Error'}.`);
+    reply("❌ AI glitch. Try again.");
   } finally {
     if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
   }
