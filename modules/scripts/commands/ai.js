@@ -6,14 +6,11 @@ const path = require("path");
 const CONFIG = {
   API_URL: "https://app.chipp.ai/api/v1/chat/completions",
   MODEL_ID: "newapplication-10035084", 
-  TIMEOUT: 120000,
-  RATE_LIMIT: { requests: 5, windowMs: 60000 }
+  TIMEOUT: 120000
 };
 
 const sessions = new Map();
-const rateLimitStore = new Map();
 
-// FEATURE: YouTube Thumbnail Detection
 async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
   try {
     const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -28,9 +25,9 @@ async function sendYouTubeThumbnail(youtubeUrl, senderID, api) {
 module.exports.config = {
   name: "ai", 
   author: "Sethdico", 
-  version: "16.80-VisionDirect", 
+  version: "17", 
   category: "AI", 
-  description: "Advanced AI with direct image-link injection.", 
+  description: "Advanced AI.", 
   adminOnly: false, 
   usePrefix: false, 
   cooldown: 0, 
@@ -41,39 +38,26 @@ module.exports.run = async function ({ event, args, api, reply }) {
   const userPrompt = args.join(" ").trim();
   const apiKey = process.env.CHIPP_API_KEY;
 
-  if (!apiKey) return reply("❌ chipp_api_key missing on render.");
-  
-  // 1. Rate Limiting
-  const now = Date.now();
-  const userTs = rateLimitStore.get(senderID) || [];
-  const recentTs = userTs.filter(ts => now - ts < CONFIG.RATE_LIMIT.windowMs);
-  if (recentTs.length >= CONFIG.RATE_LIMIT.requests) return reply("⏳ Slow down.");
-  recentTs.push(now);
-  rateLimitStore.set(senderID, recentTs);
-
-  // 2. IMAGE DETECTION (Direct URL extraction)
+  // 1. DIRECT IMAGE DETECTION (Matches exactly how your 'previous' code did it)
   let imageUrl = "";
-  const currentImg = event.message?.attachments?.find(a => a.type === "image");
-  const repliedImg = event.message?.reply_to?.attachments?.find(a => a.type === "image");
-
-  if (currentImg) {
-      imageUrl = currentImg.payload.url;
-  } else if (repliedImg) {
-      imageUrl = repliedImg.payload.url;
+  if (event.message?.attachments?.[0]?.type === "image") {
+    imageUrl = event.message.attachments[0].payload.url;
+  } else if (event.message?.reply_to?.attachments?.[0]?.type === "image") {
+    imageUrl = event.message.reply_to.attachments[0].payload.url;
   }
 
-  // 3. Logic Flow
+  // 2. Flow Handling
   if (imageUrl && !userPrompt && !event.message?.reply_to) {
     return reply("🖼️ I see the image. Reply to it and type your instructions.");
   }
   if (!userPrompt && !imageUrl) return reply("👋 hi. i'm amdusbot. i can search, see images, and write files.");
 
-  if (userPrompt.toLowerCase() === "Aiclear") { 
+  if (userPrompt.toLowerCase() === "clear") { 
       sessions.delete(senderID); 
       return reply("🧹 cleared memory."); 
   }
 
-  // 4. YouTube Thumbnail Logic
+  // 3. YouTube Thumbnail Logic
   const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
   if (userPrompt && youtubeRegex.test(userPrompt)) await sendYouTubeThumbnail(userPrompt, senderID, api);
 
@@ -86,14 +70,14 @@ module.exports.run = async function ({ event, args, api, reply }) {
     let sessionData = sessions.get(senderID) || { chatSessionId: null };
 
     const response = await fetchWithRetry(async () => {
-        // CONSTRUCTING THE DIRECT INPUT (URL + TEXT)
-        const finalInput = imageUrl ? `${imageUrl}\n\n${userPrompt}` : userPrompt;
+        // THE FIX: Pure concatenation of URL and Message (No labels to confuse the AI)
+        const finalContent = imageUrl ? `${imageUrl}\n\n${userPrompt}` : userPrompt;
 
         const body = {
           model: CONFIG.MODEL_ID,
           messages: [
               { role: "system", content: identityPrompt },
-              { role: "user", content: finalInput }
+              { role: "user", content: finalContent }
           ],
           stream: false
         };
@@ -108,7 +92,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
     if (response.data.chatSessionId) sessions.set(senderID, { chatSessionId: response.data.chatSessionId });
     const replyContent = parseAI(response);
 
-    // 5. File/Image Generation Logic
+    // 4. File Generation Detection
     const fileRegex = /(https?:\/\/[^\s)]+\.(?:pdf|docx|xlsx|txt|jpg|jpeg|png|mp4|mp3|zip)(?:\?[^\s)]*)?)/i;
     const match = replyContent?.match(fileRegex);
 
@@ -124,11 +108,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
       const fileRes = await http.get(fileUrl, { responseType: 'stream' });
       fileRes.data.pipe(writer);
 
-      await new Promise((resolve, reject) => {
-          writer.on('finish', resolve);
-          writer.on('error', reject);
-      });
-
+      await new Promise((res) => writer.on('finish', res));
       await api.sendAttachment(fileName.match(/\.(jpg|png|jpeg)$/i) ? "image" : "file", filePath, senderID);
       setTimeout(async () => { try { await fsPromises.unlink(filePath); } catch(e) {} }, 10000);
     } else {
