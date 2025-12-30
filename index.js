@@ -17,8 +17,8 @@ global.PREFIX = process.env.PREFIX || config.PREFIX || ".";
 global.CACHE_PATH = path.join(__dirname, "cache");
 global.client = { commands: new Map(), aliases: new Map() };
 global.BANNED_USERS = new Set();
-global.sessions = new Map();
-global.userCache = new Map();
+global.sessions = new Map(); 
+global.userCache = new Map(); // Speed Fix
 
 const loadCommands = (dir) => {
     const files = require("fs").readdirSync(dir);
@@ -56,11 +56,10 @@ const loadCommands = (dir) => {
     });
 
     loadCommands(path.join(__dirname, "modules/scripts/commands"));
-    
     app.use(parser.json({ limit: '20mb' }));
     app.use(rateLimiter);
 
-    app.get("/", (req, res) => res.send("🟢 System Optimal"));
+    app.get("/", (req, res) => res.send("🟢 Amduspage System: Optimal"));
     app.get("/webhook", (req, res) => {
         const vToken = process.env.VERIFY_TOKEN || config.VERIFY_TOKEN;
         if (req.query["hub.verify_token"] === vToken) res.status(200).send(req.query["hub.challenge"]);
@@ -68,7 +67,7 @@ const loadCommands = (dir) => {
     });
 
     app.post("/webhook", (req, res) => {
-        res.sendStatus(200); // Stops Facebook from retrying and sending double messages
+        res.sendStatus(200); // FIX: Stop double-messages immediately
         webhook.listen(req.body);
     });
 
