@@ -1,5 +1,5 @@
 const utils = require("./modules/utils");
-const messageHandler = require("./page/main"); // Require once at top
+const messageHandler = require("./page/main");
 
 class SimpleLRU {
     constructor(limit) { this.limit = limit; this.cache = new Map(); }
@@ -19,22 +19,44 @@ module.exports.listen = (event) => {
         
         ev.type = await utils.getEventType(ev);
         
-        if (ev.message?.mid) messagesCache.set(ev.message.mid, { 
-            text: ev.message.text, 
-            attachments: ev.message.attachments 
-        });
+        // FIXED: Cache messages WITH full attachment data
+        if (ev.message?.mid) {
+            const cacheData = { 
+                text: ev.message.text,
+                attachments: ev.message.attachments ? ev.message.attachments.map(att => ({
+                    type: att.type,
+                    payload: att.payload // Store the full payload including URL
+                })) : null
+            };
+            
+            messagesCache.set(ev.message.mid, cacheData);
+            
+            // DEBUG: Log when image is cached
+            if (cacheData.attachments?.some(a => a.type === "image")) {
+                console.log(`📸 Cached image message ${ev.message.mid}:`, cacheData.attachments[0].payload?.url);
+            }
+        }
 
+        // FIXED: Restore attachments when replying
         if (ev.type === "message_reply") {
             const cached = messagesCache.get(ev.message.reply_to?.mid);
             if (cached) {
                 ev.message.reply_to.text = cached.text;
                 ev.message.reply_to.attachments = cached.attachments;
+                
+                // DEBUG: Log when retrieving cached image
+                if (cached.attachments?.some(a => a.type === "image")) {
+                    console.log(`📸 Retrieved cached image for reply:`, cached.attachments[0].payload?.url);
+                }
+            } else {
+                // DEBUG: Log cache miss
+                console.log(`⚠️ Cache miss for message ${ev.message.reply_to?.mid}`);
             }
         }
+        
         if (ev.message?.is_echo) return;
         utils.log(ev);
         
-        // Use the pre-loaded handler
         setImmediate(() => messageHandler(ev));
     }));
 };
