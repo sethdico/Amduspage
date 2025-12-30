@@ -10,6 +10,7 @@ db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS reminders (id TEXT PRIMARY KEY, userId TEXT, message TEXT, fireAt INTEGER)`);
     db.run(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`);
     db.run(`CREATE TABLE IF NOT EXISTS stats (command TEXT PRIMARY KEY, count INTEGER DEFAULT 0)`);
+    db.run(`CREATE TABLE IF NOT EXISTS user_stats (userId TEXT PRIMARY KEY, name TEXT, count INTEGER DEFAULT 0)`);
     
     db.run(`DELETE FROM reminders WHERE fireAt < ?`, [Date.now()]);
     db.run(`VACUUM`); 
@@ -26,8 +27,15 @@ module.exports = {
     getSetting: (key) => new Promise((res) => {
         db.get("SELECT value FROM settings WHERE key = ?", [key], (err, row) => res(row ? row.value : null));
     }),
-    trackCommand: (name) => db.run("INSERT INTO stats (command, count) VALUES (?, 1) ON CONFLICT(command) DO UPDATE SET count = count + 1", [name]),
+    // TRACKER: Saves name, ID, and usage count
+    trackCommand: (name, userId, userName) => {
+        db.run("INSERT INTO stats (command, count) VALUES (?, 1) ON CONFLICT(command) DO UPDATE SET count = count + 1", [name]);
+        db.run("INSERT INTO user_stats (userId, name, count) VALUES (?, ?, 1) ON CONFLICT(userId) DO UPDATE SET count = count + 1, name = ?", [userId, userName, userName]);
+    },
     getStats: () => new Promise((res) => {
         db.all("SELECT * FROM stats ORDER BY count DESC LIMIT 5", (err, rows) => res(rows || []));
+    }),
+    getAllUsers: () => new Promise((res) => {
+        db.all("SELECT * FROM user_stats ORDER BY count DESC LIMIT 15", (err, rows) => res(rows || []));
     })
 };
