@@ -1,25 +1,51 @@
-const db = require("../../database");
-
 module.exports.config = {
-  name: "help", author: "Sethdico", version: "16.0", category: "Utility", description: "Command list.", adminOnly: false, usePrefix: false, cooldown: 2,
+  name: "help",
+  author: "Sethdico",
+  version: "16.0",
+  category: "Utility",
+  description: "Interactive command menu.",
+  adminOnly: false,
+  usePrefix: false,
+  cooldown: 2,
 };
 
 module.exports.run = async ({ event, args, api, reply }) => {
-  const input = args[0]?.toLowerCase();
-  if (input) {
-    const cmd = global.client.commands.get(input) || global.client.commands.get(global.client.aliases.get(input));
-    if (cmd) return reply(`🤖 **${cmd.config.name.toUpperCase()}**\n━━━━━━━━━━━━━━━━\nInfo: ${cmd.config.description}`);
+  const input = args[0]?.toUpperCase();
+  const categories = ["AI", "FUN", "UTILITY", "ADMIN"];
+
+  // 1. Handle "help <category>" (e.g. help ai)
+  if (categories.includes(input)) {
+      let list = `📁 **${input} COMMANDS:**\n━━━━━━━━━━━━━━━━\n`;
+      for (const [name, cmd] of global.client.commands) {
+          if (cmd.config.category?.toUpperCase() === input) {
+              list += `• ${name}\n`;
+          }
+      }
+      return reply(list);
   }
 
-  const top = await db.getStats();
-  const trending = top.map(c => c.command).join(", ") || "None yet";
+  // 2. Handle "help <command>" (e.g. help joke)
+  if (args[0]) {
+      const cmd = global.client.commands.get(args[0].toLowerCase()) || 
+                  global.client.commands.get(global.client.aliases.get(args[0].toLowerCase()));
+      if (cmd) {
+          return reply(`🤖 **${cmd.config.name.toUpperCase()}**\n━━━━━━━━━━━━━━━━\nInfo: ${cmd.config.description}\nCategory: ${cmd.config.category}`);
+      }
+  }
 
-  const msg = `🤖 **COMMAND LIST**\n━━━━━━━━━━━━━━━━\n` +
-              `📁 AI\n` +
-              `📁 FUN\n` +
-              `📁 UTILITY\n\n` +
-              `🔥 **TRENDING:** ${trending}\n\n` +
-              `Type a category name to browse.`;
+  // 3. Default Interactive Menu
+  const msg = `🤖 **COMMAND MENU**\n━━━━━━━━━━━━━━━━\nTap a category to browse or type help <cmd> for details.`;
+  
+  const buttons = [
+    { type: "postback", title: "AI", payload: "AI" },
+    { type: "postback", title: "FUN", payload: "FUN" },
+    { type: "postback", title: "UTILITY", payload: "UTILITY" }
+  ];
 
-  return reply(msg);
+  try {
+      await api.sendButton(msg, buttons, event.sender.id);
+  } catch (e) {
+      // Fallback for Lite if buttons fail to render
+      reply(`${msg}\n\nCategories: AI, FUN, UTILITY`);
+  }
 };
