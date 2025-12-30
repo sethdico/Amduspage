@@ -12,14 +12,17 @@ const parseAI = (res) => {
     const d = res.data;
     if (d.choices?.[0]?.message?.content) return d.choices[0].message.content;
     let text = d.answer || d.response || d.result || d.message || d.content || (typeof d === 'string' ? d : null);
+    if (typeof text === 'string' && text.includes("output_done")) {
+        const match = text.match(/"text":"(.*?)"/);
+        if (match) text = match[1].replace(/\\n/g, '\n');
+    }
     return text;
 };
 
 function log(event) {
     if (event.message?.is_echo || !event.sender) return;
     const senderType = global.ADMINS?.has(event.sender.id) ? "ADMIN" : "USER";
-    const msg = event.message?.text || "[Media]";
-    console.log(`[${senderType}] ${event.sender.id}: ${msg}`);
+    console.log(`[${senderType}] ${event.sender.id}: ${event.message?.text || "Media"}`);
 }
 
 function getEventType(event) {
