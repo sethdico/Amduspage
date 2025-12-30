@@ -11,7 +11,6 @@ const config = require("./config.json");
 const app = express();
 app.set('trust proxy', 1); 
 
-// 1. Safety Check: Priority to process.env, fallback to config for forking
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN || config.PAGE_ACCESS_TOKEN;
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || config.VERIFY_TOKEN;
 
@@ -45,18 +44,16 @@ const loadCommands = (dir) => {
 };
 
 (async () => {
-    // 2. Startup Maintenance
     try { 
         await require('fs').promises.mkdir(global.CACHE_PATH, { recursive: true });
         const files = await fs.readdir(global.CACHE_PATH);
         for (const file of files) await fs.unlink(path.join(global.CACHE_PATH, file));
     } catch (e) {}
 
-    // 3. Sync Bans from SQLite (REPLACES JSON LOGIC)
-    db.loadBansIntoMemory(banSet => { 
-        global.BANNED_USERS = banSet;
-        console.log(`✅ Loaded ${global.BANNED_USERS.size} banned users from DB.`);
-    });
+    db.loadBansIntoMemory(banSet => { global.BANNED_USERS = banSet; });
+    
+    const maintStatus = await db.getSetting("maintenance");
+    global.MAINTENANCE_MODE = maintStatus === "true";
 
     loadCommands(path.join(__dirname, "modules/scripts/commands"));
     
