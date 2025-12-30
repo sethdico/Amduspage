@@ -1,87 +1,60 @@
 const db = require("../../database"); 
-const activeReminders = new Map();
-
-// Import API from root/page/main.js
-let api;
-try {
-    api = require("../../../page/main").api; 
-} catch (e) {
-    console.warn("API not ready for reminders yet.");
-}
 
 const loadReminders = () => {
     db.getActiveReminders((list) => {
         list.forEach(r => {
-            if (r.fireAt > Date.now()) {
-                activeReminders.set(r.id, r);
-                const delay = r.fireAt - Date.now();
-                if (delay > 0 && delay < 2147483647) {
-                    r.timeoutId = setTimeout(() => {
-                        if (api) api.sendMessage(`⏰ **REMINDER**\n"${r.message}"`, r.userId);
-                        activeReminders.delete(r.id);
-                        db.deleteReminder(r.id);
-                    }, delay);
-                }
+            const delay = new Date(r.fireAt).getTime() - Date.now();
+            if (delay > 0 && delay < 2147483647) {
+                setTimeout(async () => {
+                    // Re-fetch global api just in case
+                    if (global.api) {
+                        global.api.sendMessage(`⏰ **REMINDER**\n"${r.message}"`, r.userId);
+                        await db.deleteReminder(r.id); // Manual cleanup for speed
+                    }
+                }, delay);
             }
         });
     });
 };
 
 module.exports.config = { 
-    name: "remind", 
-    author: "Sethdico", 
-    version: "2.3", 
-    category: "Utility", 
-    description: "Set a reminder.", 
-    adminOnly: false, 
-    usePrefix: false, 
-    cooldown: 3 
+    name: "remind", author: "Sethdico", version: "2.6", category: "Utility", description: "Set a reminder.", adminOnly: false, usePrefix: false, cooldown: 3 
 };
 
-module.exports.run = async ({ event, args, api: commandApi }) => {
-  if (!api) api = commandApi;
-  
+module.exports.run = async ({ event, args, api, reply }) => {
   const senderID = event.sender.id;
   const input = args.join(" ");
 
   if (args[0] === "list") {
-    const list = [...activeReminders.values()].filter(r => r.userId === senderID);
-    return commandApi.sendMessage(list.length ? list.map((r,i)=>`${i+1}. ${r.message}`).join("\n") : "📝 Empty", senderID);
-  }
-  
-  if (args[0] === "clear") {
-    [...activeReminders.values()].filter(r => r.userId === senderID).forEach(r => {
-        clearTimeout(r.timeoutId);
-        activeReminders.delete(r.id);
-        db.deleteReminder(r.id);
-    });
-    return commandApi.sendMessage("✅ Cleared.", senderID);
+    const list = await new Promise(resolve => db.getActiveReminders(resolve));
+    const userList = list.filter(r => r.userId === senderID);
+    return reply(userList.length ? userList.map((r,i)=>`${i+1}. ${r.message}`).join("\n") : "📝 No active reminders.");
   }
 
   const match = input.match(/^(\d+)([smhd])\s+(.+)$/);
-  if (!match) return commandApi.sendMessage("⏰ Usage: remind 10m <msg>", senderID);
+  if (!match) return reply("⏰ Usage: remind 10m <msg>");
   
   const units = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
+  const delay = parseInt(match[1]) * units[match[2]];
+
+  if (delay > 2147483647) return reply("⚠️ Max reminder time is 24 days.");
+
   const reminder = {
     id: Date.now() + Math.random().toString(36).slice(2),
     userId: senderID,
     message: match[3],
-    fireAt: Date.now() + (parseInt(match[1]) * units[match[2]])
+    fireAt: Date.now() + delay
   };
 
-  activeReminders.set(reminder.id, reminder);
-  db.addReminder(reminder);
+  await db.addReminder(reminder);
   
-  const delay = reminder.fireAt - Date.now();
-  if (delay > 0 && delay < 2147483647) {
-      reminder.timeoutId = setTimeout(() => {
-          if (api) api.sendMessage(`⏰ **REMINDER**\n"${reminder.message}"`, reminder.userId);
-          activeReminders.delete(reminder.id);
-          db.deleteReminder(reminder.id);
-      }, delay);
-  }
+  setTimeout(async () => {
+      api.sendMessage(`⏰ **REMINDER**\n"${reminder.message}"`, senderID);
+      await db.deleteReminder(reminder.id); // CLEANUP AFTER FIRING
+  }, delay);
 
-  commandApi.sendMessage(`✅ Reminder set.`, senderID);
+  reply(`✅ Reminder set for ${match[1]}${match[2]}.`);
 };
 
+// Start the reload on boot
 loadReminders();
