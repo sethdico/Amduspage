@@ -1,21 +1,21 @@
 # amduspage
 
-![NodeJS](https://img.shields.io/badge/node.js-black?style=flat-square&logo=nodedotjs) ![MongoDB](https://img.shields.io/badge/mongodb-black?style=flat-square&logo=mongodb)
+![NodeJS](https://img.shields.io/badge/node.js-black?style=flat-square&logo=nodedotjs) ![MongoDB](https://img.shields.io/badge/mongodb-black?style=flat-square&logo=mongodb) ![Express](https://img.shields.io/badge/express-black?style=flat-square&logo=express)
 
 optimized messenger pagebot. runs on nodejs.
 simple. fast. secure.
 
 **maker**
 [seth asher salinguhay](https://www.facebook.com/seth09asher)
-[github/sethdico](https://github.com/sethdico)
 
 ---
 
 ## structure
 
-- `modules/scripts/commands` — bot logic
+- `modules/commands` — bot logic
+- `modules/core` — database & cache managers
 - `page/src` — facebook api wrappers
-- `config/` — api endpoints & settings
+- `config/` — api endpoints & constants
 - `index.js` — main entry point
 
 ---
@@ -23,15 +23,16 @@ simple. fast. secure.
 ## setup
 
 **1. basic config**
-fill `config.json` with your prefix and bot name.
+fill `config/config.json` with your prefix and bot name.
 
 **2. environment variables**
-set these in your host (Render/Railway/Replit):
+set these in your host (Render/Railway/Replit) or `.env` file:
 
 | variable | description |
 | :--- | :--- |
 | `PAGE_ACCESS_TOKEN` | facebook page token |
 | `VERIFY_TOKEN` | webhook verification |
+| `APP_SECRET` | app secret for security |
 | `ADMINS` | your id (separated by comma) |
 | `MONGODB_URI` | mongodb connection string |
 | `DICT_API_KEY` | merriam-webster key |
