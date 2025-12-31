@@ -125,7 +125,37 @@ async function cleanupCache() {
     app.use(validateInput);
     app.use(rateLimiter);
     
-    app.get('/', (req, res) => res.json({ status: 'online', bot: global.BOT_NAME, commands: global.client.commands.size }));
+    // --- ROUTES START ---
+    app.get('/', (req, res) => res.json({ 
+        status: 'online', 
+        bot: global.BOT_NAME, 
+        commands: global.client.commands.size 
+    }));
+
+    // Missing Route Added
+    app.get('/health', (req, res) => {
+        res.json({
+            status: 'ok',
+            uptime: process.uptime(),
+            dbState: mongoose.connection.readyState,
+            memory: process.memoryUsage().heapUsed,
+            commands: global.client.commands.size,
+            sessions: global.sessions.size(),
+            cachedUsers: global.userCache.size()
+        });
+    });
+    
+    // Missing Route Added
+    app.get('/metrics', (req, res) => {
+        res.json({
+            commands: global.client.commands.size,
+            sessions: global.sessions.size(),
+            users: global.userCache.size(),
+            bannedUsers: global.BANNED_USERS.size,
+            uptime: process.uptime(),
+            memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + 'mb'
+        });
+    });
     
     app.get('/webhook', (req, res) => {
         const vToken = process.env.VERIFY_TOKEN || config.VERIFY_TOKEN;
@@ -137,6 +167,7 @@ async function cleanupCache() {
         res.sendStatus(200);
         webhook.listen(req.body);
     });
+    // --- ROUTES END ---
     
     const PORT = process.env.PORT || 8080;
     const server = app.listen(PORT, () => logger.info(`bot running on port ${PORT}`));
