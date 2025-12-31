@@ -12,82 +12,72 @@ module.exports.config = {
 
 module.exports.run = async function ({ event, args, api, reply }) {
     const senderID = event.sender.id;
-    const target = args[0];
+    const num = args[0];
 
-    // view specific user info
-    if (target && !isNaN(target)) {
-        const lastList = global.tempUserList.get(senderID);
-        if (!lastList) return reply("❌ type getuser first");
+    // checking specific user
+    if (num && !isNaN(num)) {
+        const list = global.tempUserList.get(senderID);
+        if (!list) return reply("type getuser first lol");
 
-        const user = lastList[parseInt(target) - 1];
-        if (!user) return reply("❌ user not found");
+        const user = list[parseInt(num) - 1];
+        if (!user) return reply("user not found");
 
-        const isBanned = global.BANNED_USERS.has(user.userId);
+        // grab fresh info from fb
+        let fb = null;
+        try { fb = await api.getUserInfo(user.userId); } catch (e) {}
 
-        const profileMsg = 
-            `👤 USER DETAILS\n` +
-            `────────────────\n` +
-            `Name: ${user.name}\n` +
-            `ID: ${user.userId}\n` +
-            `Status: ${isBanned ? "Banned" : "Active"}\n\n` +
-            
-            `Gender: ${user.gender || "Not set"}\n` +
-            `Birthday: ${user.birthday || "Not set"}\n` +
-            `Location: ${user.locale || "Unknown"}\n\n` +
-            
-            `Usage: ${user.count} messages\n` +
-            `Last Active: ${new Date(user.lastActive).toLocaleString()}\n` +
-            `────────────────`;
+        const banned = global.BANNED_USERS.has(user.userId);
+        const name = fb?.name || user.name || "unknown";
+        const pic = fb?.profile_pic || user.profilePic;
+        const gender = fb?.gender || user.gender || "not set";
+        const tz = fb?.timezone || user.timezone;
+        
+        let msg = `${name}\nid: ${user.userId}\n${banned ? "banned" : "active"}\n\n`;
+        msg += `gender: ${gender}\n`;
+        if (tz !== undefined) msg += `timezone: utc${tz > 0 ? '+' : ''}${tz}\n`;
+        msg += `\nmessages: ${user.count}\n`;
+        msg += `last active: ${new Date(user.lastActive).toLocaleDateString()}`;
 
-        const buttons = [
-            { 
-                type: "postback", 
-                title: isBanned ? "Unban User" : "Ban User", 
-                payload: isBanned ? `unban ${user.userId}` : `ban ${user.userId}` 
-            },
-            { 
-                type: "web_url", 
-                url: user.link || `https://www.facebook.com/${user.userId}`, 
-                title: "View Facebook" 
-            },
-            { 
-                type: "postback", 
-                title: "Send Message", 
-                payload: `call ${user.userId} Admin wants to talk.` 
-            }
+        const btns = [
+            { type: "postback", title: banned ? "unban" : "ban", payload: banned ? `unban ${user.userId}` : `ban ${user.userId}` },
+            { type: "web_url", url: `https://m.me/${user.userId}`, title: "chat" }
         ];
 
-        if (user.profilePic) await api.sendAttachment("image", user.profilePic, senderID);
-        return api.sendButton(profileMsg, buttons, senderID);
+        if (pic) api.sendAttachment("image", pic, senderID).catch(()=>{});
+        return api.sendButton(msg, btns, senderID);
     }
 
-    // show list of users
+    // show user list
     try {
-        const users = await db.getAllUsers();
-        
-        if (!users || users.length === 0) {
-            return reply("nobody's been active lately");
-        }
+        const all = await db.getAllUsers();
+        if (!all || all.length === 0) return reply("nobody active rn");
 
-        // filter out yourself lol
-        const others = users.filter(u => u.userId !== senderID);
+        const others = all.filter(u => u.userId !== senderID);
+        if (others.length === 0) return reply("just you, nobody else");
 
-        if (others.length === 0) {
-            return reply("just you rn, nobody else used the bot");
-        }
+        // get names
+        const updated = await Promise.all(
+            others.map(async (u) => {
+                try {
+                    const fb = await api.getUserInfo(u.userId);
+                    return { ...u, name: fb?.name || u.name || "unknown" };
+                } catch (e) {
+                    return { ...u, name: u.name || "unknown" };
+                }
+            })
+        );
 
-        global.tempUserList.set(senderID, others);
+        global.tempUserList.set(senderID, updated);
 
-        let list = "👥 Recent Users (3 Days)\n────────────────\n";
-        others.forEach((u, i) => {
-            const isBanned = global.BANNED_USERS.has(u.userId);
-            list += `${i + 1}. ${isBanned ? "🚫" : "👤"} ${u.name}\n`;
+        let txt = "recent users\n\n";
+        updated.forEach((u, i) => {
+            const banned = global.BANNED_USERS.has(u.userId);
+            txt += `${i + 1}. ${banned ? "🚫" : ""} ${u.name} (${u.count})\n`;
         });
-
-        list += `\n💡 Type 'getuser [number]' for info.`;
+        txt += `\ntype 'getuser [number]' for info`;
         
-        reply(list);
+        reply(txt);
     } catch (e) {
-        reply("❌ couldn't load users");
+        reply("couldn't load users");
     }
 };
