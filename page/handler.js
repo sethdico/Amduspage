@@ -1,4 +1,4 @@
-const db = require("../modules/database");
+const db = require("../modules/core/database");
 const cooldowns = new Map();
 const syncLocks = new Map();
 
