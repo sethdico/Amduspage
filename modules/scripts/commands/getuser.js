@@ -14,17 +14,16 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const senderID = event.sender.id;
     const target = args[0];
 
-    // 1. VIEW SPECIFIC USER (e.g., getuser 1)
+    // view specific user info
     if (target && !isNaN(target)) {
         const lastList = global.tempUserList.get(senderID);
-        if (!lastList) return reply("❌ Please type 'getuser' first to see the list.");
+        if (!lastList) return reply("❌ type getuser first");
 
         const user = lastList[parseInt(target) - 1];
-        if (!user) return reply("❌ User not found in that list.");
+        if (!user) return reply("❌ user not found");
 
         const isBanned = global.BANNED_USERS.has(user.userId);
 
-        // Simple and clean layout
         const profileMsg = 
             `👤 USER DETAILS\n` +
             `────────────────\n` +
@@ -62,23 +61,33 @@ module.exports.run = async function ({ event, args, api, reply }) {
         return api.sendButton(profileMsg, buttons, senderID);
     }
 
-    // 2. SHOW LIST OF RECENT USERS
+    // show list of users
     try {
         const users = await db.getAllUsers();
+        
         if (!users || users.length === 0) {
-            return reply("No users have been active in the last 3 days.");
+            return reply("nobody's been active lately");
         }
 
-        global.tempUserList.set(senderID, users);
+        // filter out yourself lol
+        const others = users.filter(u => u.userId !== senderID);
+
+        if (others.length === 0) {
+            return reply("just you rn, nobody else used the bot");
+        }
+
+        global.tempUserList.set(senderID, others);
 
         let list = "👥 Recent Users (3 Days)\n────────────────\n";
-        users.forEach((u, i) => {
+        others.forEach((u, i) => {
             const isBanned = global.BANNED_USERS.has(u.userId);
             list += `${i + 1}. ${isBanned ? "🚫" : "👤"} ${u.name}\n`;
         });
 
-        reply(list + "\n💡 Type 'getuser [number]' for info.");
+        list += `\n💡 Type 'getuser [number]' for info.`;
+        
+        reply(list);
     } catch (e) {
-        reply("❌ Error loading users.");
+        reply("❌ couldn't load users");
     }
 };
