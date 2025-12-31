@@ -2,7 +2,13 @@ const os = require('os');
 const db = require("../../database");
 
 module.exports.config = {
-    name: "stats", author: "Sethdico", version: "2.1", category: "Admin", adminOnly: true, usePrefix: false, cooldown: 5
+    name: "stats", 
+    author: "Sethdico", 
+    version: "3.0", 
+    category: "Admin", 
+    adminOnly: true, 
+    usePrefix: false, 
+    cooldown: 5
 };
 
 module.exports.run = async function ({ reply }) {
@@ -12,28 +18,34 @@ module.exports.run = async function ({ reply }) {
     const mins = Math.floor((uptime % 3600) / 60);
 
     const topCmds = await db.getStats();
-    const usageMsg = topCmds.slice(0, 5).map(c => `• ${c.command}: ${c.count}`).join("\n") || "No data yet.";
-    
     const totalUsers = await db.UserStat.countDocuments();
-    const activeToday = await db.UserStat.countDocuments({ lastActive: { $gte: new Date(Date.now() - 86400000) } });
+    const activeToday = await db.UserStat.countDocuments({ 
+        lastActive: { $gte: new Date(Date.now() - 86400000) } 
+    });
 
-    const msg = `📊 **SYSTEM STATS**
-────────────────
-🤖 **BOT:**
-• Commands: ${global.client.commands.size}
-• Active Sessions: ${global.sessions.size}
-• Banned: ${global.BANNED_USERS.size}
+    let msg = `system stats\n\n`;
+    
+    msg += `bot\n`;
+    msg += `commands: ${global.client.commands.size}\n`;
+    msg += `sessions: ${global.sessions.size}\n`;
+    msg += `banned: ${global.BANNED_USERS.size}\n\n`;
 
-👥 **USERS:**
-• Total: ${totalUsers}
-• Active (24h): ${activeToday}
+    msg += `users\n`;
+    msg += `total: ${totalUsers}\n`;
+    msg += `active (24h): ${activeToday}\n\n`;
 
-📈 **TOP COMMANDS:**
-${usageMsg}
+    if (topCmds.length > 0) {
+        msg += `top commands\n`;
+        topCmds.slice(0, 5).forEach(c => {
+            msg += `${c.command}: ${c.count}\n`;
+        });
+        msg += `\n`;
+    }
 
-🧠 **MEMORY:** ${(mem.heapUsed / 1024 / 1024).toFixed(2)} MB
-🖥️ **UPTIME:** ${hrs}h ${mins}m
-📡 **PLATFORM:** ${os.platform()}`;
+    msg += `system\n`;
+    msg += `memory: ${(mem.heapUsed / 1024 / 1024).toFixed(1)}mb\n`;
+    msg += `uptime: ${hrs}h ${mins}m\n`;
+    msg += `platform: ${os.platform()}`;
 
     reply(msg);
 };
