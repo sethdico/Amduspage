@@ -1,7 +1,8 @@
 const axios = require("axios");
 const FormData = require("form-data");
 const fs = require("fs");
-const { API_VERSION } = require("../../config.json");
+// UPDATED PATH: Points to config/config.json
+const { API_VERSION } = require("../../config/config.json");
 
 module.exports = function (event) {
   return async function sendAttachment(type, source, senderID) {
