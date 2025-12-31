@@ -13,13 +13,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const senderID = event.sender.id;
     const index = args[0];
 
-    // check specific user
+    // info for specific user
     if (index && !isNaN(index)) {
         const list = global.tempUserList.get(senderID);
         if (!list) return reply("type getuser first");
 
         const user = list[parseInt(index) - 1];
-        if (!user) return reply("not in the list");
+        if (!user) return reply("user not found");
 
         const banned = global.BANNED_USERS.has(user.userId);
         
@@ -28,7 +28,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         msg += `active: ${new Date(user.lastActive).toLocaleDateString()}`;
 
         const btns = [
-            { type: "web_url", url: `https://www.facebook.com/messages/t/${user.userId}`, title: "open chat" },
+            { type: "web_url", url: `https://www.facebook.com/${user.userId}`, title: "facebook link" },
             { type: "postback", title: banned ? "unban" : "ban", payload: banned ? `unban ${user.userId}` : `ban ${user.userId}` }
         ];
 
@@ -36,22 +36,22 @@ module.exports.run = async function ({ event, args, api, reply }) {
         return api.sendButton(msg, btns, senderID);
     }
 
-    // list users
+    // show list
     try {
         const all = await db.getAllUsers();
         const others = all.filter(u => u.userId !== senderID).slice(0, 15);
 
-        if (others.length === 0) return reply("no users yet");
+        if (others.length === 0) return reply("no users in database");
 
         const updated = await Promise.all(
             others.map(async (u) => {
-                // if name is generic, try a fresh fetch
-                if (!u.name || u.name === "user" || u.name === "Unknown User") {
+                // try to fix 'new user' if api is feeling nice
+                if (!u.name || u.name === "new user" || u.name === "user") {
                     const fb = await api.getUserInfo(u.userId);
-                    if (fb) {
+                    if (fb && fb.name) {
                         u.name = fb.name;
                         u.profilePic = fb.pic;
-                        db.syncUser(u.userId, fb); // update db quietly
+                        db.syncUser(u.userId, fb); 
                     } else {
                         u.name = "new user";
                     }
@@ -67,10 +67,10 @@ module.exports.run = async function ({ event, args, api, reply }) {
             const isBanned = global.BANNED_USERS.has(u.userId);
             txt += `${i + 1}. ${isBanned ? "🚫 " : ""}${u.name} (${u.count || 0})\n`;
         });
-        txt += "\ntype getuser [number] to see profile link";
+        txt += "\ntype getuser [number] for info";
         
         reply(txt);
     } catch (e) {
-        reply("error getting list");
+        reply("failed to load user list");
     }
 };
