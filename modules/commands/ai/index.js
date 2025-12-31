@@ -24,7 +24,6 @@ module.exports.run = async function ({ event, args, api, reply }) {
   const senderID = event.sender.id;
   const userPrompt = args.join(" ").trim();
 
-  // Check for images
   const currentImg = event.message?.attachments?.find(a => a.type === "image")?.payload?.url;
   const repliedImg = event.message?.reply_to?.attachments?.find(a => a.type === "image")?.payload?.url;
   const imageUrl = currentImg || repliedImg || "";
@@ -34,19 +33,15 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
   try {
     const sessionData = getSession(senderID);
-    
-    // Call AI Handler
     const data = await askChipp(userPrompt, imageUrl, sessionData);
 
     if (data.chatSessionId) saveSession(senderID, data.chatSessionId);
     
-    // Process response using wrapper to match helpers
     const replyContent = parseAI({ data }); 
     const fileRegex = /(https?:\/\/[^\s)]+\.(?:pdf|docx|xlsx|txt|jpg|jpeg|png|mp4|mp3|zip)(?:\?[^\s)]*)?)/i;
     const match = replyContent?.match(fileRegex);
 
     if (match) {
-      // Handle file download
       const fileUrl = match[0];
       const textOnly = replyContent.replace(match[0], "").trim();
       if (textOnly) await reply(textOnly);
