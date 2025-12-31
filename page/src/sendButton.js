@@ -2,16 +2,19 @@ const axios = require("axios");
 
 module.exports = function (event) {
   return function sendButton(text, buttons, senderID) {
-    const recipientID = senderID || event.sender.id;
+    const id = senderID || event.sender.id;
     
-    // Lite rendering: Keep text short for that "top-right" look
-    const safeText = text.length > 600 ? text.substring(0, 597) + "..." : text;
+    // keep text under 640 chars for better mobile display
+    const msg = text.length > 640 ? text.substring(0, 637) + "..." : text;
 
-    const formattedButtons = buttons.slice(0, 3).map(btn => {
-      if (btn.type === "web_url") return { type: "web_url", url: btn.url, title: btn.title };
-      
-      // CHANGE: Use 'type: text' if available, otherwise 'postback'
-      // FB Lite handles text-trigger buttons more reliably
+    const btns = buttons.slice(0, 3).map(btn => {
+      if (btn.type === "web_url") {
+        return { 
+          type: "web_url", 
+          url: btn.url, 
+          title: btn.title 
+        };
+      }
       return { 
         type: "postback", 
         title: btn.title, 
@@ -19,14 +22,21 @@ module.exports = function (event) {
       };
     });
 
-    return axios.post(`https://graph.facebook.com/v21.0/me/messages?access_token=${global.PAGE_ACCESS_TOKEN}`, {
-      recipient: { id: recipientID },
-      message: {
-        attachment: {
-          type: "template",
-          payload: { template_type: "button", text: safeText, buttons: formattedButtons }
+    return axios.post(
+      `https://graph.facebook.com/v21.0/me/messages?access_token=${global.PAGE_ACCESS_TOKEN}`, 
+      {
+        recipient: { id: id },
+        message: {
+          attachment: {
+            type: "template",
+            payload: { 
+              template_type: "button", 
+              text: msg, 
+              buttons: btns 
+            }
+          }
         }
       }
-    }).catch(e => console.error("Button Fail"));
+    ).catch(e => console.error("button send failed:", e.message));
   };
 };
