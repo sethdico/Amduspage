@@ -1,4 +1,4 @@
-const db = require("../../../modules/database");
+const db = require("../core/database");
 
 module.exports.config = {
   name: "ban", 
