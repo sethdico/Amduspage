@@ -5,11 +5,11 @@ module.exports = function (event) {
     const userID = id || event.sender.id;
     try {
       const res = await axios.get(
-        `https://graph.facebook.com/${userID}?fields=first_name,last_name,profile_pic&access_token=${global.PAGE_ACCESS_TOKEN}`
+        `https://graph.facebook.com/${userID}?fields=name,first_name,last_name,profile_pic,gender,birthday,link,locale,timezone&access_token=${global.PAGE_ACCESS_TOKEN}`
       );
       return res.data;
     } catch (e) {
-      return { first_name: "User", last_name: "", profile_pic: "" };
+      return { name: "Unknown User", first_name: "User" };
     }
   };
 };
