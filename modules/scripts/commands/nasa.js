@@ -3,9 +3,9 @@ const { http } = require("../../utils");
 module.exports.config = {
   name: "nasa",
   author: "Sethdico",
-  version: "1.5-Fast",
+  version: "2.0",
   category: "Fun",
-  description: "Space photo of the day.",
+  description: "space photo of the day",
   adminOnly: false,
   usePrefix: false,
   cooldown: 5,
@@ -16,23 +16,28 @@ module.exports.run = async function ({ event, args, api }) {
   let url = `https://api.nasa.gov/planetary/apod?api_key=${apiKey}`;
   if (args[0] === "random") url += "&count=1";
 
-  if (api.sendTypingIndicator) api.sendTypingIndicator(true, event.sender.id);
+  if (api.sendTypingIndicator) api.sendTypingIndicator(true, event.sender.id).catch(()=>{});
 
   try {
     const res = await http.get(url);
     const data = Array.isArray(res.data) ? res.data[0] : res.data;
 
-    const msg = `🌌 **${data.title}**\n📅 ${data.date}\n\n${data.explanation.substring(0, 400)}...`;
+    const desc = data.explanation.length > 500 
+      ? data.explanation.substring(0, 497) + "..." 
+      : data.explanation;
+
+    const msg = `${data.title}\n${data.date}\n\n${desc}`;
 
     if (data.media_type === "image") {
       await api.sendAttachment("image", data.hdurl || data.url, event.sender.id);
     }
     
-    // Buttons sometimes fail on mobile, so we send text first
-    const buttons = [{ type: "postback", title: "🎲 Random", payload: "nasa random" }];
+    const buttons = [{ type: "postback", title: "random", payload: "nasa random" }];
     api.sendButton(msg, buttons, event.sender.id);
 
-  } catch (error) {
-    api.sendMessage("❌ NASA servers are busy.", event.sender.id);
+  } catch (e) {
+    api.sendMessage("nasa api unavailable", event.sender.id);
+  } finally {
+    if (api.sendTypingIndicator) api.sendTypingIndicator(false, event.sender.id).catch(()=>{});
   }
 };
