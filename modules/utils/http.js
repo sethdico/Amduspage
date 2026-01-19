@@ -12,13 +12,16 @@ setInterval(() => {
             requestCache.delete(key);
         }
     }
-}, CONSTANTS.CLEANUP_INTERVAL);
+}, CONSTANTS.CLEANUP_INTERVAL || 300000);
+
+// By default we verify TLS
+const rejectUnauthorized = process.env.ALLOW_INSECURE_TLS ? false : true;
 
 const http = axios.create({
     timeout: 60000,
     httpsAgent: new https.Agent({ 
         keepAlive: true, 
-        rejectUnauthorized: false 
+        rejectUnauthorized: rejectUnauthorized 
     }),
     headers: { 'User-Agent': 'Amduspage/Bot' },
     maxRedirects: 3,
@@ -26,20 +29,17 @@ const http = axios.create({
     validateStatus: status => status < 500
 });
 
-// add retry interceptor
+// retry interceptor
 http.interceptors.response.use(
     response => response,
     async error => {
-        const config = error.config;
+        const config = error.config || {};
         
-        if (!config || !config.retry) {
-            config.retry = 0;
-        }
-        
+        config.retry = config.retry || 0;
         config.retry += 1;
         
-        if (config.retry <= CONSTANTS.MAX_RETRIES && error.response?.status >= 500) {
-            await new Promise(r => setTimeout(r, CONSTANTS.RETRY_DELAY * config.retry));
+        if (config.retry <= (CONSTANTS.MAX_RETRIES || 3) && error.response?.status >= 500) {
+            await new Promise(r => setTimeout(r, (CONSTANTS.RETRY_DELAY || 1000) * config.retry));
             return http(config);
         }
         
