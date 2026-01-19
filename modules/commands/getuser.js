@@ -29,11 +29,15 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
         const btns = [
             { type: "web_url", url: `https://www.facebook.com/${user.userId}`, title: "facebook link" },
-            { type: "postback", title: banned ? "unban" : "ban", payload: banned ? `unban ${user.userId}` : `ban ${user.userId}` }
+            { type: "postback", title: banned ? "unban" : "ban", payload: (banned ? `unban ${user.userId}` : `ban ${user.userId}`) }
         ];
 
         if (user.profilePic) api.sendAttachment("image", user.profilePic, senderID).catch(()=>{});
-        return api.sendButton(msg, btns, senderID);
+        // ensure sendButton errors don't crash
+        return api.sendButton(msg, btns, senderID).catch((e) => {
+            console.error("sendButton failed:", e);
+            reply(msg);
+        });
     }
 
     // show list
@@ -45,7 +49,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
         const updated = await Promise.all(
             others.map(async (u) => {
-                // try to fix 'new user' if api is feeling nice
+                // try to fix 'new user' if api gives details
                 if (!u.name || u.name === "new user" || u.name === "user") {
                     const fb = await api.getUserInfo(u.userId);
                     if (fb && fb.name) {
@@ -71,6 +75,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         
         reply(txt);
     } catch (e) {
+        console.error("getuser failed:", e);
         reply("failed to load user list");
     }
 };
