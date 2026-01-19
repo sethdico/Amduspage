@@ -3,9 +3,9 @@ const { http } = require("../utils");
 module.exports.config = {
     name: "wolfram", 
     author: "Sethdico", 
-    version: "9.0", 
+    version: "9.2", 
     category: "Utility", 
-    description: "wolfram alpha", 
+    description: "wolfram alpha search", 
     adminOnly: false, 
     usePrefix: false, 
     cooldown: 5,
@@ -30,40 +30,38 @@ module.exports.run = async function ({ event, args, api, reply }) {
         });
 
         const data = res.data.queryresult;
-        if (!data.success || data.error) return reply("wolfram couldn't solve that");
+        
+        if (!data.success || data.error) return reply("wolfram found nothing");
 
-        // collect important results
-        const importantPods = ["Result", "Solution", "Decimal approximation", "Value"];
-        let results = [];
+        let msg = "";
         let images = [];
 
         if (data.pods) {
             data.pods.forEach(pod => {
-                const isImportant = importantPods.some(ip => pod.title.includes(ip));
+                let podContent = "";
                 
                 pod.subpods?.forEach(sub => {
-                    if (sub.plaintext && isImportant) {
-                        results.push(`${pod.title}\n${sub.plaintext}`);
+                    if (sub.plaintext) {
+                        podContent += sub.plaintext + "\n";
                     }
-                    
-                    // grab plot/graph images
-                    if (sub.img?.src && (pod.title.includes("Plot") || pod.title.includes("Graph"))) {
-                        if (images.length < 2) images.push(sub.img.src);
+                    if (sub.img?.src && sub.img.height > 20) {
+                        images.push(sub.img.src);
                     }
                 });
+
+                if (podContent.trim()) {
+                    msg += `ðŸ“ **${pod.title}**\n${podContent.trim()}\n\n`;
+                }
             });
         }
 
-        // send results
-        if (results.length > 0) {
-            const msg = results.slice(0, 3).join("\n\n");
-            await api.sendMessage(msg, id);
-        } else {
-            await api.sendMessage("no clear answer found", id);
-        }
+        if (!msg) return reply("no clear text results found");
 
-        // send images if any
-        for (const img of images) {
+        await api.sendMessage(msg.trim(), id);
+
+        const imgsToSend = images.filter(img => !img.includes("d=1")).slice(0, 3);
+        
+        for (const img of imgsToSend) {
             await api.sendAttachment("image", img, id).catch(()=>{});
         }
 
