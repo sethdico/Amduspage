@@ -1,46 +1,44 @@
 const db = require("../core/database");
 
 module.exports.config = {
-  name: "ban", 
-  aliases: ["unban", "banlist"], 
-  author: "Sethdico", 
-  version: "2.2", 
-  category: "Admin", 
-  description: "manage users.", 
-  adminOnly: true, 
-  usePrefix: false, 
-  cooldown: 0
+    name: "ban",
+    author: "Sethdico",
+    category: "Admin",
+    adminOnly: true,
+    usePrefix: false
 };
 
-module.exports.run = async function ({ event, args, reply }) {
-  const senderID = event.sender.id;
-  const cmd = event.message.text.toLowerCase().split(" ")[0];
-
-  if (!global.ADMINS.has(senderID)) return reply("❌ restricted.");
-
-  if (cmd === "ban") {
-    const target = args[0];
-    const reason = args.slice(1).join(" ") || "no reason provided";
-    if (!target) return reply("⚠️ usage: ban <id> [reason]");
-    global.BANNED_USERS.add(target);
-    db.addBan(target, reason);
-    reply(`🚫 banned ${target}\nReason: ${reason}`);
-  } 
-  
-  else if (cmd === "unban") {
-    const target = args[0];
-    if (!target) return reply("⚠️ usage: unban <id>");
-    if (global.BANNED_USERS.has(target)) {
-      global.BANNED_USERS.delete(target);
-      db.removeBan(target);
-      reply(`✅ unbanned ${target}`);
-    } else {
-      reply("⚠️ user not banned");
+module.exports.run = async function ({ event, args, api, reply }) {
+    // supports:
+    // ban <userId> [reason...]
+    // unban <userId>
+    const action = (args[0] || '').toLowerCase();
+    if (action === 'unban' && args[1]) {
+        const id = args[1];
+        try {
+            await db.removeBan(id);
+            global.BANNED_USERS.delete(id);
+            return reply(`unbanned ${id}`);
+        } catch (e) {
+            console.error("unban failed:", e);
+            return reply("failed to unban");
+        }
     }
-  } 
-  
-  else if (cmd === "banlist" || args[0] === "list") {
-    if (global.BANNED_USERS.size === 0) return reply("✅ no banned users");
-    reply(`🚫 **Banned Users (${global.BANNED_USERS.size}):**\n────────────────\n${Array.from(global.BANNED_USERS).join("\n")}`);
-  }
+
+    // If first arg looks like an id, treat as ban <id>
+    if (args[0] && /^(\d+)$/.test(args[0])) {
+        const id = args[0];
+        const reason = args.slice(1).join(' ') || 'no reason';
+        try {
+            await db.addBan(id, reason);
+            global.BANNED_USERS.add(id);
+            return reply(`banned ${id} — ${reason}`);
+        } catch (e) {
+            console.error("ban failed:", e);
+            return reply("failed to ban");
+        }
+    }
+
+    // fallback usage
+    return reply("Usage:\nban <userId> [reason]\nunban <userId>");
 };
