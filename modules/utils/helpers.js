@@ -1,4 +1,6 @@
 const CONSTANTS = require('../../config/constants');
+const dns = require('dns').promises;
+const { URL } = require('url');
 
 function sanitize(input) {
     if (typeof input !== 'string') return '';
@@ -53,10 +55,58 @@ function chunkText(text, size = CONSTANTS.MAX_MESSAGE_LENGTH) {
     return chunks;
 }
 
+// --- SSRF / private host protection helpers ---
+
+// quick IPv4 private checks using prefix patterns
+function isPrivateIPv4(ip) {
+    if (!ip || typeof ip !== 'string') return false;
+    // common private / link-local / loopback patterns
+    if (ip.startsWith('10.')) return true;
+    if (ip.startsWith('127.')) return true;
+    if (ip.startsWith('169.254.')) return true;
+    if (ip.startsWith('192.168.')) return true;
+    if (ip.startsWith('172.')) {
+        // 172.16.0.0 - 172.31.255.255
+        const second = parseInt(ip.split('.')[1], 10);
+        if (second >= 16 && second <= 31) return true;
+    }
+    return false;
+}
+
+function isProbablyPrivateIPv6(ip) {
+    if (!ip) return false;
+    if (ip === '::1') return true;
+    if (ip.startsWith('fc') || ip.startsWith('fd')) return true; // unique local
+    if (ip.startsWith('fe80')) return true; // link-local
+    return false;
+}
+
+async function isPrivateHost(urlString) {
+    try {
+        const u = new URL(urlString);
+        const hostname = u.hostname;
+        // quick reject for localhost names
+        if (hostname === 'localhost' || hostname === 'ip6-localhost') return true;
+
+        // resolve hostname
+        const res = await dns.lookup(hostname, { all: true });
+        for (const r of res) {
+            const addr = r.address;
+            if (r.family === 4 && isPrivateIPv4(addr)) return true;
+            if (r.family === 6 && isProbablyPrivateIPv6(addr)) return true;
+        }
+    } catch (e) {
+        // if DNS lookup fails, treat as not private (caller will still handle failed fetch)
+        return false;
+    }
+    return false;
+}
+
 module.exports = {
     sanitize,
     parseAI,
     getEventType,
     retry,
-    chunkText
+    chunkText,
+    isPrivateHost
 };
