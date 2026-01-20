@@ -1,11 +1,13 @@
 const axios = require("axios");
 
+const chatHistory = new Map();
+
 module.exports.config = {
     name: "mimo",
     author: "Sethdico",
-    version: "2.0",
+    version: "2.1",
     category: "AI",
-    description: "Xiaomi Mimo V2 Flash with Internet Search",
+    description: "Mimo V2 flash with google api and fake memory",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -13,61 +15,75 @@ module.exports.config = {
 
 module.exports.run = async function ({ event, args, api, reply }) {
     const query = args.join(" ").trim();
+    const sid = event.threadID || event.sender.id;
+
+    if (!query) return reply("Hey, what's on your mind?");
     
-    if (!query) return reply("what do you wanna know?");
-
-    const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
-    const googleApiKey = process.env.GOOGLE_API_KEY;
-    const googleCx = process.env.GOOGLE_CX;
-
-    if (!OPENROUTER_KEY) {
-        return reply("api key not set up, check your env variables");
+    if (query.toLowerCase() === "clear" || query.toLowerCase() === "reset") {
+        chatHistory.delete(sid);
+        return reply("Memory wiped. Starting fresh.");
     }
 
-    if (api.sendTypingIndicator) api.sendTypingIndicator(true, event.sender.id);
+    const { OPENROUTER_KEY, GOOGLE_API_KEY, GOOGLE_CX } = process.env;
 
-    let context = "";
+    if (!OPENROUTER_KEY) return reply("API key missing in environment variables.");
+
+    if (api.sendTypingIndicator) api.sendTypingIndicator(true, sid);
+
+    let userHistory = chatHistory.get(sid) || [];
+
+    const isMetaQuestion = /what.*(said|talk|conversation|discussed|last)/i.test(query);
+    let searchContext = "";
 
     try {
-        if (googleApiKey && googleCx) {
+        if (GOOGLE_API_KEY && GOOGLE_CX && !isMetaQuestion) {
             const searchRes = await axios.get("https://www.googleapis.com/customsearch/v1", {
-                params: { key: googleApiKey, cx: googleCx, q: query, num: 5 },
-                timeout: 8000
+                params: { key: GOOGLE_API_KEY, cx: GOOGLE_CX, q: query, num: 3 },
+                timeout: 5000 
             });
             
             if (searchRes.data.items?.length > 0) {
-                const results = searchRes.data.items.slice(0, 3)
-                    .map(item => `${item.title}\n${item.snippet}`)
-                    .join("\n\n");
-                context = `search results:\n${results}\n\n`;
+                const results = searchRes.data.items
+                    .map(item => `• ${item.title}: ${item.snippet}`)
+                    .join("\n");
+                
+                searchContext = `\n\n[WEB SEARCH RESULTS]:\n${results}\n(Use these to answer if relevant)`;
             }
         }
     } catch (e) {
-        console.log("search failed:", e.message);
+        console.warn("Mimo Search Error:", e.message); 
     }
 
-    const systemPrompt = "you're a chill assistant. if there's search results, use them. keep it casual and helpful.";
+    const systemPrompt = {
+        role: "system",
+        content: "You are Mimo, a chill and helpful AI assistant. You have access to conversation history and real-time web search results. " + 
+                 "If the user asks a question requiring facts, use the [WEB SEARCH RESULTS]. " + 
+                 "If the user asks about the conversation, use the history. Keep answers concise and casual."
+    };
 
     try {
+        const messages = [
+            systemPrompt,
+            ...userHistory, 
+            { role: "user", content: query + searchContext }
+        ];
+
         const response = await axios.post(
             "https://openrouter.ai/api/v1/chat/completions",
             {
                 model: "xiaomi/mimo-v2-flash:free",
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: context + query }
-                ],
+                messages: messages,
                 temperature: 0.7,
-                max_tokens: 1000
+                max_tokens: 800
             },
             {
                 headers: {
                     "Authorization": `Bearer ${OPENROUTER_KEY}`,
                     "Content-Type": "application/json",
-                    "HTTP-Referer": "https://github.com/sethdico/Amduspage",
-                    "X-Title": "Mimo AI Bot"
+                    "HTTP-Referer": "https://github.com/sethdico",
+                    "X-Title": "Mimo AI"
                 },
-                timeout: 30000
+                timeout: 25000
             }
         );
 
@@ -75,28 +91,29 @@ module.exports.run = async function ({ event, args, api, reply }) {
         
         if (answer) {
             reply(answer);
+
+            userHistory.push({ role: "user", content: query });
+            userHistory.push({ role: "assistant", content: answer });
+
+            if (userHistory.length > 10) {
+                userHistory = userHistory.slice(userHistory.length - 10);
+            }
+            
+            chatHistory.set(sid, userHistory);
+
         } else {
-            reply("got nothing back, try again?");
+            reply("I processed that, but came back empty. Try again?");
         }
 
     } catch (error) {
-        console.log("mimo error:", error.response?.data || error.message);
-
-        let msg = "couldn't get a response";
+        console.error("Mimo Logic Error:", error.response?.data || error.message);
         
-        if (error.code === 'ECONNABORTED') {
-            msg = "took too long, try again";
-        } else if (error.response?.status === 429) {
-            msg = "too many requests, wait a sec";
-        } else if (error.response?.status === 401) {
-            msg = "invalid api key, get a new one from openrouter.ai";
-        } else if (error.response?.data?.error?.message) {
-            msg = error.response.data.error.message;
-        }
+        if (error.code === 'ECONNABORTED') return reply("I timed out. The network is slow.");
+        if (error.response?.status === 429) return reply("Too many requests. Give me a sec.");
         
-        reply(msg);
+        reply("Brain freeze. Something went wrong.");
 
     } finally {
-        if (api.sendTypingIndicator) api.sendTypingIndicator(false, event.sender.id);
+        if (api.sendTypingIndicator) api.sendTypingIndicator(false, sid);
     }
 };
