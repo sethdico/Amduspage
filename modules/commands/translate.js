@@ -7,7 +7,7 @@ const LANGS = {
 };
 
 module.exports.config = {
-  name: "translate",
+  name: "trans",
   author: "Sethdico",
   version: "3.0",
   category: "Utility",
