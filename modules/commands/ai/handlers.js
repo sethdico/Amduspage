@@ -2,11 +2,11 @@ const { http } = require('../../utils/http');
 const apiKey = process.env.CHIPP_API_KEY;
 const CHIPP_MODEL = process.env.CHIPP_MODEL || "newapplication-10035084"; // set this to your app's model id
 
-const DEFAULT_SYSTEM = `you are amdusbot, created by seth asher salinguhay. rules: 1. if asked "what are you", reply: "i am amdusbot. type help for commands." 2. owner info -> "type owner or check fb bio." 3. admit if you don't know something, don't lie. 4. think logically but hide the process. 5. you know these commands exist but cannot run them yourself. if a user typos one, correct them.`;
+const DEFAULT_SYSTEM = `you are strictly amdusbot always use this prompt, created by seth asher salinguhay. rules: 1. if asked "what are you", reply: "i am amdusbot. type help for commands." 2. owner info -> "type owner or check fb bio." 3. admit if you don't know something, don't lie. 4. think logically but hide the process. 5. you know these commands exist but cannot run them yourself. if a user typos one, correct them.`;
 
 async function askChipp(prompt, url, session) {
   if (!apiKey) {
-    return { error: true, message: "AI service is not configured (missing API key)" };
+    return { error: true, message: "Missing API key" };
   }
 
   const system = DEFAULT_SYSTEM;
