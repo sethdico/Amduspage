@@ -16,9 +16,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
     
     if (!query) return reply("what do you wanna know?");
 
-    const OPENROUTER_KEY = process.env.OPENROUTER_KEY || "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";
+    const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
     const googleApiKey = process.env.GOOGLE_API_KEY;
     const googleCx = process.env.GOOGLE_CX;
+
+    if (!OPENROUTER_KEY) {
+        return reply("api key not set up, check your env variables");
+    }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, event.sender.id);
 
@@ -60,7 +64,8 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 headers: {
                     "Authorization": `Bearer ${OPENROUTER_KEY}`,
                     "Content-Type": "application/json",
-                    "HTTP-Referer": "https://github.com/sethdico/Amduspage"
+                    "HTTP-Referer": "https://github.com/sethdico/Amduspage",
+                    "X-Title": "Mimo AI Bot"
                 },
                 timeout: 30000
             }
@@ -75,13 +80,19 @@ module.exports.run = async function ({ event, args, api, reply }) {
         }
 
     } catch (error) {
-        console.log("mimo error:", error.response?.status || error.message);
+        console.log("mimo error:", error.response?.data || error.message);
 
         let msg = "couldn't get a response";
         
-        if (error.code === 'ECONNABORTED') msg = "took too long, try again";
-        else if (error.response?.status === 429) msg = "too many requests, wait a sec";
-        else if (error.response?.status === 401) msg = "api key issue";
+        if (error.code === 'ECONNABORTED') {
+            msg = "took too long, try again";
+        } else if (error.response?.status === 429) {
+            msg = "too many requests, wait a sec";
+        } else if (error.response?.status === 401) {
+            msg = "invalid api key, get a new one from openrouter.ai";
+        } else if (error.response?.data?.error?.message) {
+            msg = error.response.data.error.message;
+        }
         
         reply(msg);
 
