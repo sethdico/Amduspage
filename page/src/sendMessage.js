@@ -1,5 +1,4 @@
 const axios = require("axios");
-// UPDATED PATH: Points to config/config.json
 const { API_VERSION } = require("../../config/config.json");
 
 module.exports = function (event) {
@@ -7,21 +6,25 @@ module.exports = function (event) {
     const recipientID = senderID || event.sender.id;
     if (!text) return;
 
-    // Convert non-string input safely
     const content = String(text);
 
-    // Helper to split text without breaking words
-    const splitMessage = (str, size) => {
-      const numChunks = Math.ceil(str.length / size);
-      const chunks = new Array(numChunks);
-      for (let i = 0, o = 0; i < numChunks; ++i, o += size) {
-        chunks[i] = str.substr(o, size);
+    const splitMessage = (text, maxLength = 1900) => {
+      const chunks = [];
+      let remaining = text;
+
+      while (remaining.length > maxLength) {
+        let splitAt = remaining.lastIndexOf('\n', maxLength);
+        if (splitAt === -1) splitAt = remaining.lastIndexOf(' ', maxLength);
+        if (splitAt === -1) splitAt = maxLength;
+
+        chunks.push(remaining.substring(0, splitAt));
+        remaining = remaining.substring(splitAt).trim();
       }
+      if (remaining) chunks.push(remaining);
       return chunks;
     };
 
-    // Facebook limit is 2000, we use 1900 to be safe
-    const chunks = splitMessage(content, 1900);
+    const chunks = splitMessage(content);
 
     for (const chunk of chunks) {
       try {
@@ -33,8 +36,7 @@ module.exports = function (event) {
             messaging_type: "RESPONSE"
           }
         );
-        // Small delay between chunks to ensure order
-        await new Promise(res => setTimeout(res, 100)); 
+        await new Promise(res => setTimeout(res, 250)); 
       } catch (e) {
         console.error("SendMessage Error:", e.message);
       }
