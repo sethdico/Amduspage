@@ -5,9 +5,9 @@ const chatHistory = new Map();
 module.exports.config = {
     name: "mimo",
     author: "Sethdico",
-    version: "2.1",
+    version: "3.0",
     category: "AI",
-    description: "Mimo V2 flash with google api and fake memory",
+    description: "Mimo V2 Flash (Xiaomi) with Context Awareness",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -17,55 +17,78 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const query = args.join(" ").trim();
     const sid = event.threadID || event.sender.id;
 
-    if (!query) return reply("Hey, what's on your mind?");
-    
+    if (!query) return reply("Hello! I am Mimo V2 Flash by Xiaomi. How can I help you?");
+
     if (query.toLowerCase() === "clear" || query.toLowerCase() === "reset") {
         chatHistory.delete(sid);
-        return reply("Memory wiped. Starting fresh.");
+        return reply("🔄 Context memory cleared. Starting fresh.");
     }
 
     const { OPENROUTER_KEY, GOOGLE_API_KEY, GOOGLE_CX } = process.env;
 
-    if (!OPENROUTER_KEY) return reply("API key missing in environment variables.");
+    if (!OPENROUTER_KEY) return reply("⚠️ System Error: OPENROUTER_KEY is missing.");
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, sid);
 
     let userHistory = chatHistory.get(sid) || [];
 
-    const isMetaQuestion = /what.*(said|talk|conversation|discussed|last)/i.test(query);
-    let searchContext = "";
+    const isMetaQuestion = /what.*(we|said|talk|conversation|discussed|last|previous)/i.test(query);
+    let googleContext = "";
 
     try {
         if (GOOGLE_API_KEY && GOOGLE_CX && !isMetaQuestion) {
             const searchRes = await axios.get("https://www.googleapis.com/customsearch/v1", {
-                params: { key: GOOGLE_API_KEY, cx: GOOGLE_CX, q: query, num: 3 },
-                timeout: 5000 
+                params: { 
+                    key: GOOGLE_API_KEY, 
+                    cx: GOOGLE_CX, 
+                    q: query, 
+                    num: 4 
+                },
+                timeout: 6000 
             });
             
             if (searchRes.data.items?.length > 0) {
-                const results = searchRes.data.items
-                    .map(item => `• ${item.title}: ${item.snippet}`)
-                    .join("\n");
-                
-                searchContext = `\n\n[WEB SEARCH RESULTS]:\n${results}\n(Use these to answer if relevant)`;
+                const rawResults = searchRes.data.items.map((item, index) => {
+                    return `[Source ${index + 1}]: ${item.title}\nURL: ${item.link}\nSummary: ${item.snippet}`;
+                }).join("\n\n");
+
+                googleContext = `\n<search_results>\nThe user is asking: "${query}". Here is real-time data from Google:\n\n${rawResults}\n\nINSTRUCTIONS: Use this data to answer accurately. Include the URL if the summary is insufficient.\n</search_results>`;
             }
         }
     } catch (e) {
-        console.warn("Mimo Search Error:", e.message); 
+        console.warn("Search Module Error:", e.message);
     }
+
+    const now = new Date();
+    const dateString = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
     const systemPrompt = {
         role: "system",
-        content: "You are Mimo, a chill and helpful AI assistant. You have access to conversation history and real-time web search results. " + 
-                 "If the user asks a question requiring facts, use the [WEB SEARCH RESULTS]. " + 
-                 "If the user asks about the conversation, use the history. Keep answers concise and casual."
+        content: `You are Mimo V2 Flash, an advanced AI assistant developed by Xiaomi. 
+        
+        Your Identity:
+        - You are witty, helpful, and highly intelligent.
+        - You allow for natural conversation while providing factual data.
+        - You are aware that the current date is ${dateString} at ${timeString}.
+        
+        Rules:
+        1. Context Awareness: Distinguish clearly between the User's Message and the <search_results> data.
+        2. Web Data: If search results are provided, use them to answer factual questions. If the snippet is too short, provide the Source URL.
+        3. Memory: Use the conversation history to answer questions about previous topics.
+        4. Tone: Keep it human-like, casual, and concise.`
     };
 
     try {
+        const currentMessage = {
+            role: "user",
+            content: googleContext ? `${query}\n${googleContext}` : query
+        };
+
         const messages = [
             systemPrompt,
-            ...userHistory, 
-            { role: "user", content: query + searchContext }
+            ...userHistory,
+            currentMessage
         ];
 
         const response = await axios.post(
@@ -74,16 +97,17 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 model: "xiaomi/mimo-v2-flash:free",
                 messages: messages,
                 temperature: 0.7,
-                max_tokens: 800
+                max_tokens: 1200,
+                top_p: 0.9
             },
             {
                 headers: {
                     "Authorization": `Bearer ${OPENROUTER_KEY}`,
                     "Content-Type": "application/json",
-                    "HTTP-Referer": "https://github.com/sethdico",
-                    "X-Title": "Mimo AI"
+                    "HTTP-Referer": "https://xiaomi.com",
+                    "X-Title": "Mimo V2 Flash"
                 },
-                timeout: 25000
+                timeout: 40000
             }
         );
 
@@ -95,23 +119,25 @@ module.exports.run = async function ({ event, args, api, reply }) {
             userHistory.push({ role: "user", content: query });
             userHistory.push({ role: "assistant", content: answer });
 
-            if (userHistory.length > 10) {
-                userHistory = userHistory.slice(userHistory.length - 10);
+            if (userHistory.length > 12) {
+                userHistory = userHistory.slice(userHistory.length - 12);
             }
             
             chatHistory.set(sid, userHistory);
 
         } else {
-            reply("I processed that, but came back empty. Try again?");
+            reply("I'm having trouble connecting to the neural network. Please try again.");
         }
 
     } catch (error) {
-        console.error("Mimo Logic Error:", error.response?.data || error.message);
+        console.error("Mimo System Error:", error.response?.data || error.message);
         
-        if (error.code === 'ECONNABORTED') return reply("I timed out. The network is slow.");
-        if (error.response?.status === 429) return reply("Too many requests. Give me a sec.");
+        let errorMsg = "An internal error occurred.";
+        if (error.code === 'ECONNABORTED') errorMsg = "The request timed out. My servers are busy.";
+        if (error.response?.status === 429) errorMsg = "Too many requests. Please slow down.";
+        if (error.response?.status === 401) errorMsg = "Authentication failed. Check API keys.";
         
-        reply("Brain freeze. Something went wrong.");
+        reply(errorMsg);
 
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, sid);
