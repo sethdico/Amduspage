@@ -1,7 +1,7 @@
 module.exports.config = {
   name: "help", 
   author: "Sethdico", 
-  version: "21.0", 
+  version: "22.0", 
   category: "Utility", 
   description: "command list", 
   adminOnly: false, 
@@ -17,28 +17,34 @@ module.exports.run = async ({ event, args, api, reply }) => {
   if (input) {
     const cmd = global.client.commands.get(input) || global.client.commands.get(global.client.aliases.get(input));
     if (cmd) {
-        if (cmd.config.category === "Admin" && !isAdmin) return; 
+        if (cmd.config.adminOnly && !isAdmin) return; 
         return reply(`${cmd.config.name}\n${cmd.config.description || 'no description'}`);
     }
     return reply(`command "${input}" not found`);
   }
 
-  // build command list
-  const cats = ["AI", "FUN", "UTILITY"];
-  if (isAdmin) cats.push("ADMIN");
-
-  const sorted = {};
-  cats.forEach(c => sorted[c] = []);
-  
-  for (const [name, cmd] of global.client.commands) {
-      const cat = cmd.config.category?.toUpperCase();
-      if (sorted[cat]) sorted[cat].push(name);
-  }
+  // get all unique categories dynamically
+  const commands = Array.from(global.client.commands.values());
+  const categories = [...new Set(commands.map(c => c.config.category || "Uncategorized"))];
 
   let msg = "commands\n\n";
-  cats.forEach(c => {
-      if (sorted[c].length > 0) {
-          msg += `${c.toLowerCase()}\n${sorted[c].sort().join(", ")}\n\n`;
+  
+  categories.forEach(cat => {
+      // filter commands in this category
+      const cmds = commands.filter(c => (c.config.category || "Uncategorized") === cat);
+      
+      // hide admin category if user isn't admin
+      if (cat.toLowerCase() === "admin" && !isAdmin) return;
+
+      // get names
+      const names = cmds
+          .filter(c => !c.config.adminOnly || isAdmin) // double check visibility
+          .map(c => c.config.name)
+          .sort()
+          .join(", ");
+
+      if (names) {
+          msg += `${cat.toLowerCase()}\n${names}\n\n`;
       }
   });
   
