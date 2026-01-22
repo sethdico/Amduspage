@@ -5,9 +5,9 @@ const chatHistory = new Map();
 module.exports.config = {
     name: "mimo",
     author: "Sethdico",
-    version: "8.0",
+    version: "11.0", 
     category: "AI",
-    description: "Mimo V2: Multimodal Agent (Vision + Search + Reasoning)",
+    description: "Mimo V2: Vision + Search + Critical Thinking",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -17,7 +17,6 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const query = args.join(" ").trim();
     const sid = event.threadID || event.sender.id;
     
-    // 1. Get Attachments (Images/Videos)
     const getAttachment = (msg) => {
         if (!msg || !msg.attachments) return null;
         return msg.attachments.find(a => a.type === "image" || a.type === "video");
@@ -28,7 +27,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
     if (["clear", "reset", "forget"].includes(query.toLowerCase())) {
         chatHistory.delete(sid);
-        return reply("Conversation memory has been cleared.");
+        return reply("Context memory cleared.");
     }
 
     const { OPENROUTER_KEY, OPENROUTER2_KEY, GOOGLE_API_KEY, GOOGLE_CX, JINA_API_KEY } = process.env;
@@ -42,14 +41,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
     let userHistory = chatHistory.get(sid) || [];
 
-    // --- MODULE 1: VISION (Molmo) ---
     const analyzeMedia = async () => {
         if (!attachment) return null;
         try {
             const mediaUrl = attachment.payload.url;
             const isVideo = attachment.type === "video";
             const contentPayload = [
-                { type: "text", text: "Describe this media in extreme detail. Identify objects, text, people, timestamps, and context." }
+                { type: "text", text: "Analyze this media carefully. Describe the scene, text on screen, objects, people, and any visible dates or timestamps." }
             ];
             if (isVideo) contentPayload.push({ type: "video_url", video_url: { url: mediaUrl } });
             else contentPayload.push({ type: "image_url", image_url: { url: mediaUrl } });
@@ -73,25 +71,20 @@ module.exports.run = async function ({ event, args, api, reply }) {
         }
     };
 
-    // --- MODULE 2: DEEP SEARCH (Google + Jina) ---
     const performWebSearch = async () => {
-        // Skip search for personal memory questions
         if (/what.*(we|i|said|talk|conversation|discussed|last|previous|remember)/i.test(query)) return null;
         if (!query) return null; 
 
         try {
-            // Search Google (Top 4 results)
             const googleRes = await axios.get("https://www.googleapis.com/customsearch/v1", {
-                params: { key: GOOGLE_API_KEY, cx: GOOGLE_CX, q: query, num: 4, gl: "ph" }, // gl: ph ensures results relevant to user's region
+                params: { key: GOOGLE_API_KEY, cx: GOOGLE_CX, q: query, num: 4 }, 
                 timeout: 10000
             });
 
             if (!googleRes.data.items || googleRes.data.items.length === 0) return null;
 
-            // Map the Google Results first (Snippet Fallback)
             const searchItems = googleRes.data.items;
             
-            // Read the Top 3 links in parallel
             const scrapePromises = searchItems.slice(0, 3).map(async (item) => {
                 let fullText = "";
                 try {
@@ -100,16 +93,14 @@ module.exports.run = async function ({ event, args, api, reply }) {
                         headers: JINA_API_KEY ? { 'Authorization': `Bearer ${JINA_API_KEY}` } : {}
                     });
                     if (r.data) fullText = typeof r.data === 'string' ? r.data : JSON.stringify(r.data);
-                } catch (e) {
-                    // If Jina fails, we keep fullText empty and rely on the Google Snippet
-                }
+                } catch (e) {}
 
                 return `
 SOURCE: ${item.title}
 LINK: ${item.link}
-GOOGLE SNIPPET: ${item.snippet}
-FULL CONTENT: ${fullText.substring(0, 2000)}
---------------------------------------------------`;
+PUBLISHED: ${item.snippet}
+CONTENT: ${fullText.substring(0, 2000)}
+---`;
             });
 
             const results = await Promise.all(scrapePromises);
@@ -131,25 +122,37 @@ FULL CONTENT: ${fullText.substring(0, 2000)}
         if (visionResult) finalContext += `\n[VISUAL CONTEXT]:\n${visionResult}\n`;
         if (searchResult) finalContext += `\n[WEB SEARCH RESULTS]:\n${searchResult}\n`;
 
-        // Get accurate date info
         const now = new Date();
-        const dateString = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        const fullDateString = now.toLocaleString('en-US', { 
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+            hour: '2-digit', minute: '2-digit', timeZoneName: 'short' 
+        });
 
         const systemPrompt = {
             role: "system",
-            content: `You are Mimo V2.
+            content: `You are Mimo V2, an intelligent assistant by Xiaomi.
             
-            IMPORTANT CONTEXT:
-            - Current Date: ${dateString}, ${timeString}.
-            - User Location: Philippines.
-            - Your internal training data is OUTDATED.
+            GLOBAL TIME ANCHOR: ${fullDateString}.
             
-            INSTRUCTIONS:
-            1. TRUST THE [WEB SEARCH RESULTS] ABOVE ALL ELSE. If the search results say something is released in 2026, believe it, even if your internal data says "TBA".
-            2. If [WEB SEARCH RESULTS] are present, base your answer entirely on them.
-            3. If the user sent an image, use [VISUAL CONTEXT].
-            4. Keep the tone helpful, human, and direct. Do not sound robotic.`
+            CORE LOGIC & REASONING:
+            1. CREDIBILITY CHECK (CRITICAL):
+               - Do not blindly trust [WEB SEARCH RESULTS]. Evaluate them first.
+               - If the Search Results look like scams (e.g., "Free Money," "Download RAM"), logically reject them using your Internal Knowledge and warn the user.
+               - If Search Results contradict basic science or logic (e.g., "The moon is made of cheese"), verify against your Internal Knowledge and correct it.
+            
+            2. TEMPORAL SYNTHESIS:
+               - Compare dates in the text with "GLOBAL TIME ANCHOR".
+               - Example: If text says "Coming 2025" and today is 2026, treat it as released/past.
+            
+            3. KNOWLEDGE MERGER:
+               - Use [WEB SEARCH RESULTS] for: Recent news, prices, release dates, weather, current leaders.
+               - Use [INTERNAL KNOWLEDGE] for: General facts, safety, coding, definitions, and logic.
+               - Use [VISUAL CONTEXT] for: Answering questions about the attached image.
+            
+            4. PERSONA:
+               - Helpful, smart, and direct.
+               - If sources conflict, state: "Sources are conflicting, but..."
+               - If something is an obvious hoax found online, debunk it.`
         };
 
         const messages = [
@@ -163,7 +166,7 @@ FULL CONTENT: ${fullText.substring(0, 2000)}
             {
                 model: "xiaomi/mimo-v2-flash:free",
                 messages: messages,
-                temperature: 0.4, // Lower temperature = More factual/Less hallucination
+                temperature: 0.5, 
                 max_tokens: 1500,
                 top_p: 0.9
             },
