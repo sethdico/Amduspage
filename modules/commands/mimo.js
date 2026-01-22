@@ -150,7 +150,7 @@ CONTENT: ${fullText.substring(0, 2000)}
                - Use [VISUAL CONTEXT] for: Answering questions about the attached image.
             
             4. PERSONA:
-               - Helpful, smart, and direct.
+               - Helpful, smart, straightforward and direct.
                - If sources conflict, state: "Sources are conflicting, but..."
                - If something is an obvious hoax found online, debunk it.`
         };
