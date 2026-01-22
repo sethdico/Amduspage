@@ -3,9 +3,9 @@ const axios = require("axios");
 module.exports.config = {
     name: "sim",
     author: "Sethdico",
-    version: "2.1",
+    version: "2.2",
     category: "Fun",
-    description: "chat and teach simsimi by jerome/gojochan",
+    description: "chat and teach simsimi",
     adminOnly: false,
     usePrefix: false,
     cooldown: 2,
@@ -45,7 +45,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
             });
             return reply(`learned. ask "${ask}" and i'll say "${ans}".`);
         } catch (e) {
-            return reply("cant learn that.");
+            return reply("cant learn that rn.");
         }
     }
 
@@ -63,6 +63,6 @@ module.exports.run = async function ({ event, args, api, reply }) {
         api.sendButton(responseText, buttons, senderID);
 
     } catch (e) {
-        reply("sleeping simsimi api.");
+        reply("simsimi is sleeping.");
     }
 };
