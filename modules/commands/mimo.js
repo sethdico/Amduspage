@@ -5,7 +5,7 @@ const chatHistory = new Map();
 module.exports.config = {
     name: "mimo",
     author: "Sethdico",
-    version: "7.0",
+    version: "8.0",
     category: "AI",
     description: "Mimo V2: Multimodal Agent (Vision + Search + Reasoning)",
     adminOnly: false,
@@ -17,6 +17,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const query = args.join(" ").trim();
     const sid = event.threadID || event.sender.id;
     
+    // 1. Get Attachments (Images/Videos)
     const getAttachment = (msg) => {
         if (!msg || !msg.attachments) return null;
         return msg.attachments.find(a => a.type === "image" || a.type === "video");
@@ -32,7 +33,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
     const { OPENROUTER_KEY, OPENROUTER2_KEY, GOOGLE_API_KEY, GOOGLE_CX, JINA_API_KEY } = process.env;
 
-    if (!OPENROUTER_KEY) return reply("Configuration Error: OPENROUTER_KEY (Mimo) is missing.");
+    if (!OPENROUTER_KEY) return reply("Configuration Error: OPENROUTER_KEY is missing.");
     if (!GOOGLE_API_KEY || !GOOGLE_CX) return reply("Configuration Error: Google Search keys are missing.");
     
     const visionKey = OPENROUTER2_KEY || OPENROUTER_KEY; 
@@ -40,23 +41,18 @@ module.exports.run = async function ({ event, args, api, reply }) {
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, sid);
 
     let userHistory = chatHistory.get(sid) || [];
-    
+
+    // --- MODULE 1: VISION (Molmo) ---
     const analyzeMedia = async () => {
         if (!attachment) return null;
-        
         try {
             const mediaUrl = attachment.payload.url;
             const isVideo = attachment.type === "video";
-            
             const contentPayload = [
-                { type: "text", text: "Describe this media in extreme detail. Identify objects, text, people, location, and context." }
+                { type: "text", text: "Describe this media in extreme detail. Identify objects, text, people, timestamps, and context." }
             ];
-
-            if (isVideo) {
-                contentPayload.push({ type: "video_url", video_url: { url: mediaUrl } });
-            } else {
-                contentPayload.push({ type: "image_url", image_url: { url: mediaUrl } });
-            }
+            if (isVideo) contentPayload.push({ type: "video_url", video_url: { url: mediaUrl } });
+            else contentPayload.push({ type: "image_url", image_url: { url: mediaUrl } });
 
             const res = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
                 model: "allenai/molmo-2-8b:free",
@@ -67,50 +63,57 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 headers: { 
                     "Authorization": `Bearer ${visionKey}`,
                     "Content-Type": "application/json",
-                    "HTTP-Referer": "https://github.com/sethdico",
-                    "X-Title": "Mimo Vision"
+                    "HTTP-Referer": "https://github.com/sethdico"
                 },
                 timeout: 30000 
             });
-
             return res.data?.choices?.[0]?.message?.content || null;
         } catch (e) {
-            console.warn("Vision Analysis Failed:", e.message);
             return null; 
         }
     };
 
+    // --- MODULE 2: DEEP SEARCH (Google + Jina) ---
     const performWebSearch = async () => {
+        // Skip search for personal memory questions
         if (/what.*(we|i|said|talk|conversation|discussed|last|previous|remember)/i.test(query)) return null;
         if (!query) return null; 
 
         try {
+            // Search Google (Top 4 results)
             const googleRes = await axios.get("https://www.googleapis.com/customsearch/v1", {
-                params: { key: GOOGLE_API_KEY, cx: GOOGLE_CX, q: query, num: 3 },
-                timeout: 8000
+                params: { key: GOOGLE_API_KEY, cx: GOOGLE_CX, q: query, num: 4, gl: "ph" }, // gl: ph ensures results relevant to user's region
+                timeout: 10000
             });
 
             if (!googleRes.data.items || googleRes.data.items.length === 0) return null;
 
-            const topLinks = googleRes.data.items.slice(0, 2).map(item => item.link);
-            const scrapePromises = topLinks.map(link => 
-                axios.get(`https://r.jina.ai/${link}`, {
-                    timeout: 15000,
-                    headers: JINA_API_KEY ? { 'Authorization': `Bearer ${JINA_API_KEY}` } : {}
-                }).catch(() => null)
-            );
+            // Map the Google Results first (Snippet Fallback)
+            const searchItems = googleRes.data.items;
+            
+            // Read the Top 3 links in parallel
+            const scrapePromises = searchItems.slice(0, 3).map(async (item) => {
+                let fullText = "";
+                try {
+                    const r = await axios.get(`https://r.jina.ai/${item.link}`, {
+                        timeout: 15000,
+                        headers: JINA_API_KEY ? { 'Authorization': `Bearer ${JINA_API_KEY}` } : {}
+                    });
+                    if (r.data) fullText = typeof r.data === 'string' ? r.data : JSON.stringify(r.data);
+                } catch (e) {
+                    // If Jina fails, we keep fullText empty and rely on the Google Snippet
+                }
 
-            const scrapedResults = await Promise.all(scrapePromises);
+                return `
+SOURCE: ${item.title}
+LINK: ${item.link}
+GOOGLE SNIPPET: ${item.snippet}
+FULL CONTENT: ${fullText.substring(0, 2000)}
+--------------------------------------------------`;
+            });
 
-            const combinedContent = scrapedResults
-                .filter(res => res && res.data)
-                .map(res => {
-                    const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
-                    return text.substring(0, 1500); 
-                })
-                .join("\n\n---\n\n");
-
-            return combinedContent ? combinedContent : null;
+            const results = await Promise.all(scrapePromises);
+            return results.join("\n");
 
         } catch (e) {
             console.warn("Web Search Failed:", e.message);
@@ -125,33 +128,28 @@ module.exports.run = async function ({ event, args, api, reply }) {
         ]);
 
         let finalContext = "";
-        
-        if (visionResult) {
-            finalContext += `\n[VISUAL CONTEXT (What the user sent)]:\n${visionResult}\n`;
-        }
-        
-        if (searchResult) {
-            finalContext += `\n[WEB SEARCH RESULTS]:\n${searchResult}\n`;
-        }
+        if (visionResult) finalContext += `\n[VISUAL CONTEXT]:\n${visionResult}\n`;
+        if (searchResult) finalContext += `\n[WEB SEARCH RESULTS]:\n${searchResult}\n`;
 
+        // Get accurate date info
         const now = new Date();
         const dateString = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
         const systemPrompt = {
             role: "system",
-            content: `You are Mimo V2, an intelligent multimodal assistant by Xiaomi.
-            Date: ${dateString}.
-
-            Capabilities:
-            1. VISUAL: You can see images/videos via the [VISUAL CONTEXT] block. Use this to answer questions about attachments.
-            2. SEARCH: You have access to [WEB SEARCH RESULTS]. Use this for facts, news, and data.
-            3. MEMORY: You remember the chat history.
-
-            Guidelines:
-            - Be helpful, accurate, and detailed.
-            - Synthesize the Visual Context and Web Results to answer the user.
-            - If the Visual Context describes an object, and the user asks for details not in the image, use the Web Results or your knowledge.
-            - Do not mention internal tool names (like "Molmo" or "Jina"). Just act like you can see and search.`
+            content: `You are Mimo V2.
+            
+            IMPORTANT CONTEXT:
+            - Current Date: ${dateString}, ${timeString}.
+            - User Location: Philippines.
+            - Your internal training data is OUTDATED.
+            
+            INSTRUCTIONS:
+            1. TRUST THE [WEB SEARCH RESULTS] ABOVE ALL ELSE. If the search results say something is released in 2026, believe it, even if your internal data says "TBA".
+            2. If [WEB SEARCH RESULTS] are present, base your answer entirely on them.
+            3. If the user sent an image, use [VISUAL CONTEXT].
+            4. Keep the tone helpful, human, and direct. Do not sound robotic.`
         };
 
         const messages = [
@@ -165,9 +163,9 @@ module.exports.run = async function ({ event, args, api, reply }) {
             {
                 model: "xiaomi/mimo-v2-flash:free",
                 messages: messages,
-                temperature: 0.6,
-                max_tokens: 1200,
-                top_p: 1
+                temperature: 0.4, // Lower temperature = More factual/Less hallucination
+                max_tokens: 1500,
+                top_p: 0.9
             },
             {
                 headers: {
@@ -185,7 +183,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         if (answer) {
             reply(answer);
 
-            const historyContent = query + (visionResult ? ` (User sent image: ${visionResult.substring(0, 100)}...)` : "");
+            const historyContent = query + (visionResult ? " (User sent an image)" : "");
             
             userHistory.push({ role: "user", content: historyContent });
             userHistory.push({ role: "assistant", content: answer });
@@ -194,12 +192,12 @@ module.exports.run = async function ({ event, args, api, reply }) {
             chatHistory.set(sid, userHistory);
 
         } else {
-            reply("I'm having trouble processing that request. Please try again.");
+            reply("I'm having trouble connecting to the network. Please try again.");
         }
 
     } catch (error) {
-        console.error("Mimo Orchestrator Error:", error.message);
-        reply("An internal error occurred while processing your request.");
+        console.error("Mimo Error:", error.message);
+        reply("An internal error occurred.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, sid);
     }
