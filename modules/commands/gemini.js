@@ -3,9 +3,9 @@ const axios = require("axios");
 module.exports.config = {
     name: "gemini",
     author: "Sethdico",
-    version: "3.7",
+    version: "4.0",
     category: "AI",
-    description: "Gemini 3 Pro with image analysis and fallback",
+    description: "Gemini 3 Pro with multi-image vision support",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -16,7 +16,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const uid = event.sender.id;
     const cookie = process.env.GEMINI_COOKIE;
 
-    if (!cookie) return reply("configuration error: GEMINI_COOKIE is missing.");
+    if (!cookie) return reply("cookie's missing. check the settings.");
 
     if (["clear", "reset", "forget"].includes(prompt.toLowerCase())) {
         try {
@@ -27,7 +27,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
             });
             return reply("memory wiped.");
         } catch (e) {
-            return reply("failed to reset context.");
+            return reply("failed to reset.");
         }
     }
 
@@ -46,34 +46,51 @@ module.exports.run = async function ({ event, args, api, reply }) {
     }
 
     if (!prompt && images.length === 0) {
-        return reply("what do you want to know?");
+        return reply("what's on your mind?");
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
 
     try {
-        const res = await axios.post("https://yaya-q598.onrender.com/gemini", {
+        const payload = {
             senderid: uid,
             message: prompt,
-            cookies: { "__Secure-1PSID": cookie },
-            urls: images.length > 0 ? images : undefined
+            cookies: { "__Secure-1PSID": cookie }
+        };
+
+        if (images.length > 0) {
+            payload.urls = images;
+        }
+
+        const res = await axios.post("https://yaya-q598.onrender.com/gemini", payload, {
+            headers: { "Content-Type": "application/json" },
+            timeout: 60000
         });
 
-        const { response, fallback } = res.data;
+        const { response, fallback, model } = res.data;
 
         if (response) {
-            const modelLabel = fallback ? "flash" : "pro";
-            reply(`[gemini 3 ${modelLabel}]\n\n${response}`);
+            const status = fallback ? "flash" : "pro";
+            reply(`[gemini 3 ${status}]\n\n${response}`);
         } else {
-            reply("no response received.");
+            reply("got no response. try again.");
         }
 
     } catch (error) {
-        if (error.response?.status === 401) {
-            reply("session expired. please update the cookie.");
-        } else {
-            reply("the server encountered an error. try again later.");
+        const status = error.response?.status;
+        const errorData = error.response?.data;
+
+        console.error("Gemini Error Detail:", errorData || error.message);
+
+        if (status === 401 || (errorData && JSON.stringify(errorData).includes("cookie"))) {
+            return reply("session expired. need a new cookie.");
         }
+        
+        if (status === 400) {
+            return reply("invalid request. maybe the image is unreadable.");
+        }
+
+        reply("the server encountered an error. try again later.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }
