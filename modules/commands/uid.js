@@ -1,20 +1,35 @@
 const db = require("../core/database");
-module.exports.config = { name: "uid", category: "Utility" };
 
-module.exports.run = async ({ event, api, reply }) => {
-    const id = event.sender.id;
+module.exports.config = {
+    name: "uid",
+    category: "Utility",
+    adminOnly: false,
+    usePrefix: false
+};
+
+module.exports.run = async ({ event, args, api, reply }) => {
+    const targetID = args[0] || event.sender.id;
+
     try {
-        const info = await api.getUserInfo(id);
-        const name = `${info.first_name} ${info.last_name}`;
-        const dbUser = await db.getUserData(id);
+        const info = await api.getUserInfo(targetID);
+        const name = info ? `${info.first_name} ${info.last_name}` : "unknown user";
+        const dbUser = await db.getUserData(targetID);
         
-        let msg = `🆔 **User Info**\n────────────────\nName: ${name}\nID: ${id}\n`;
+        let msg = `user info\n\nname: ${name}\nid: ${targetID}\n`;
+        
         if (dbUser) {
-            msg += `Messages: ${dbUser.count}\n`;
-            msg += `Last active: ${new Date(dbUser.lastActive).toLocaleDateString()}`;
+            msg += `msgs: ${dbUser.count}\n`;
+            msg += `last active: ${new Date(dbUser.lastActive).toLocaleDateString()}`;
+        } else {
+            msg += `status: not in database`;
         }
         
         reply(msg);
-        if (info.profile_pic) api.sendAttachment("image", info.profile_pic, id);
-    } catch (e) { reply(`🆔 ID: ${id}`); }
+        
+        if (info && info.profile_pic) {
+            api.sendAttachment("image", info.profile_pic, event.sender.id);
+        }
+    } catch (e) {
+        reply(`id: ${targetID}`);
+    }
 };
