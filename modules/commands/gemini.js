@@ -16,7 +16,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const uid = event.sender.id;
     const cookie = process.env.GEMINI_COOKIE;
 
-    if (!cookie) return reply("cookie's missing. check the settings.");
+    if (!cookie) return reply("cookie's missing.");
 
     if (["clear", "reset", "forget"].includes(prompt.toLowerCase())) {
         try {
