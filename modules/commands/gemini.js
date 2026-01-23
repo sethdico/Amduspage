@@ -36,13 +36,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
         ...(event.message?.attachments || []), 
         ...(event.message?.reply_to?.attachments || [])
     ];
-
+    
     attachments.forEach(att => {
         if (att.type === "image") images.push(att.payload.url);
     });
 
     if (images.length > 0 && !prompt) {
-        return reply("what should i do with this image? tell me your purpose.");
+        return reply("reply to your image alongside with instruction.");
     }
 
     if (!prompt && images.length === 0) {
@@ -79,7 +79,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
     } catch (error) {
         const status = error.response?.status;
         const errorData = error.response?.data;
-
+        
         console.error("Gemini Error Detail:", errorData || error.message);
 
         if (status === 401 || (errorData && JSON.stringify(errorData).includes("cookie"))) {
@@ -91,6 +91,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         }
 
         reply("the server encountered an error. try again later.");
+
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }
