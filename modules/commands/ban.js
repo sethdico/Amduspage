@@ -2,43 +2,43 @@ const db = require("../core/database");
 
 module.exports.config = {
     name: "ban",
+    aliases: ["unban"],
     author: "Sethdico",
     category: "Admin",
     adminOnly: true,
     usePrefix: false
 };
 
-module.exports.run = async function ({ event, args, api, reply }) {
-    // supports:
-    // ban <userId> [reason...]
-    // unban <userId>
-    const action = (args[0] || '').toLowerCase();
-    if (action === 'unban' && args[1]) {
-        const id = args[1];
+module.exports.run = async function ({ event, args, reply }) {
+    const content = (event.message?.text || event.postback?.payload || "").trim().toLowerCase();
+    const isUnban = content.startsWith("unban") || args[0] === "unban";
+
+    let targetID = args[0];
+    let reason = args.slice(1).join(" ") || "violation";
+
+    if (args[0] === "unban" && args[1]) {
+        targetID = args[1];
+    }
+
+    if (!targetID || isNaN(targetID)) {
+        return reply("usage: ban/unban <uid>");
+    }
+
+    if (isUnban) {
         try {
-            await db.removeBan(id);
-            global.BANNED_USERS.delete(id);
-            return reply(`unbanned ${id}`);
+            await db.removeBan(targetID);
+            global.BANNED_USERS.delete(targetID);
+            return reply(`unbanned ${targetID}.`);
         } catch (e) {
-            console.error("unban failed:", e);
-            return reply("failed to unban");
+            return reply("failed to unban.");
         }
     }
 
-    // If first arg looks like an id, treat as ban <id>
-    if (args[0] && /^(\d+)$/.test(args[0])) {
-        const id = args[0];
-        const reason = args.slice(1).join(' ') || 'no reason';
-        try {
-            await db.addBan(id, reason);
-            global.BANNED_USERS.add(id);
-            return reply(`banned ${id} — ${reason}`);
-        } catch (e) {
-            console.error("ban failed:", e);
-            return reply("failed to ban");
-        }
+    try {
+        await db.addBan(targetID, reason);
+        global.BANNED_USERS.add(targetID);
+        return reply(`banned ${targetID}.`);
+    } catch (e) {
+        return reply("failed to ban.");
     }
-
-    // fallback usage
-    return reply("Usage:\nban <userId> [reason]\nunban <userId>");
 };
