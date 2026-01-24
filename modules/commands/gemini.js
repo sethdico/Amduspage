@@ -3,7 +3,7 @@ const { http } = require("../utils");
 module.exports.config = {
     name: "gemini",
     author: "Sethdico",
-    version: "1.0",
+    version: "3.0",
     category: "AI",
     description: "gemini 2.5 flash lite",
     adminOnly: false,
@@ -19,19 +19,21 @@ module.exports.run = async function ({ event, args, reply }) {
 
     const replied = event.message?.reply_to?.attachments?.find(a => a.type === "image");
 
-    if (!replied) return reply("reply to an image.");
-    if (!prompt) return reply("add a caption.");
+    if (!prompt && !replied) return reply("say something.");
+
+    const content = [];
+    
+    if (prompt) content.push({ type: "text", text: prompt });
+    else content.push({ type: "text", text: "describe this image" });
+
+    if (replied) {
+        content.push({ type: "image_url", image_url: { url: replied.payload.url } });
+    }
 
     try {
         const res = await http.post("https://gen.pollinations.ai/v1/chat/completions", {
             model: "gemini-fast",
-            messages: [{
-                role: "user",
-                content: [
-                    { type: "text", text: prompt },
-                    { type: "image_url", image_url: { url: replied.payload.url } }
-                ]
-            }]
+            messages: [{ role: "user", content: content }]
         }, {
             headers: {
                 "Authorization": `Bearer ${apiKey}`,
