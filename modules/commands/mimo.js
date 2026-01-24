@@ -1,10 +1,10 @@
-const axios = require("axios");
+const { http } = require("../utils");
 const db = require("../core/database");
 
 module.exports.config = {
     name: "mimo",
     author: "Sethdico",
-    version: "12.0",
+    version: "12.1",
     category: "AI",
     description: "Mimo V2: Vision + Persistent Memory + Critical Reasoning",
     adminOnly: false,
@@ -44,7 +44,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
             if (attachment.type === "video") contentPayload.push({ type: "video_url", video_url: { url: mediaUrl } });
             else contentPayload.push({ type: "image_url", image_url: { url: mediaUrl } });
 
-            const res = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
+            const res = await http.post("https://openrouter.ai/api/v1/chat/completions", {
                 model: "allenai/molmo-2-8b:free",
                 messages: [{ role: "user", content: contentPayload }],
                 temperature: 0.2,
@@ -57,14 +57,14 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const performWebSearch = async () => {
         if (!query || /remember|last|conversation/i.test(query)) return null; 
         try {
-            const googleRes = await axios.get("https://www.googleapis.com/customsearch/v1", {
+            const googleRes = await http.get("https://www.googleapis.com/customsearch/v1", {
                 params: { key: GOOGLE_API_KEY, cx: GOOGLE_CX, q: query, num: 4 }
             });
             if (!googleRes.data.items) return null;
             const results = await Promise.all(googleRes.data.items.slice(0, 3).map(async (item) => {
                 let fullText = "";
                 try {
-                    const r = await axios.get(`https://r.jina.ai/${item.link}`, { headers: JINA_API_KEY ? { 'Authorization': `Bearer ${JINA_API_KEY}` } : {} });
+                    const r = await http.get(`https://r.jina.ai/${item.link}`, { headers: JINA_API_KEY ? { 'Authorization': `Bearer ${JINA_API_KEY}` } : {} });
                     fullText = typeof r.data === 'string' ? r.data : JSON.stringify(r.data);
                 } catch (e) {}
                 return `SOURCE: ${item.title}\nCONTEXT: ${item.snippet}\nCONTENT: ${fullText.substring(0, 1800)}\n---`;
@@ -79,7 +79,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         if (visionResult) finalContext += `\n[VISUAL CONTEXT]:\n${visionResult}\n`;
         if (searchResult) finalContext += `\n[WEB SEARCH RESULTS]:\n${searchResult}\n`;
 
-        const response = await axios.post("https://openrouter.ai/api/v1/chat/completions", {
+        const response = await http.post("https://openrouter.ai/api/v1/chat/completions", {
             model: "xiaomi/mimo-v2-flash:free",
             messages: [{ role: "system", content: "You are Mimo V2." }, ...userHistory, { role: "user", content: query ? query + "\n" + finalContext : finalContext }],
             temperature: 0.5, 
