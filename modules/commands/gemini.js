@@ -1,33 +1,34 @@
-const { http } = require("../utils");
+const axios = require("axios");
 
 module.exports.config = {
     name: "gemini",
-    author: "Sethdico",
-    version: "6.0",
+    author: "Jerome",
+    version: "2.0",
     category: "AI",
-    description: "Gemini 3 Pro",
+    description: "Chat with Gemini (text + multi-image support)",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
 };
 
-module.exports.run = async function ({ event, args, api, reply }) {
-    const prompt = args.join(" ").trim();
-    const uid = event.sender.id;
-    const cookie = process.env.GEMINI_COOKIE;
+module.exports.run = async function ({ event, args, reply }) {
+    const senderId = event.sender.id;
+    const message = args.join(" ").trim();
 
-    if (!cookie) return reply("missing cookie in config.");
+    const GEMINI_COOKIES = {
+        "__Secure-1PSID": process.env.GEMINI_COOKIE
+    };
 
-    if (["clear", "reset"].includes(prompt.toLowerCase())) {
+    if (message.toLowerCase() === "clear") {
         try {
-            await http.post("https://yaya-q598.onrender.com/gemini", {
-                senderid: uid,
+            await axios.post("https://yaya-q598.onrender.com/gemini", {
+                senderid: senderId,
                 message: "clear",
-                cookies: { "__Secure-1PSID": cookie }
-            });
-            return reply("history cleared.");
+                cookies: GEMINI_COOKIES
+            }, { headers: { "Content-Type": "application/json" } });
+            return reply("Conversation cleared successfully.");
         } catch (e) {
-            return reply("failed to clear.");
+            return reply("Failed to clear conversation.");
         }
     }
 
@@ -39,33 +40,28 @@ module.exports.run = async function ({ event, args, api, reply }) {
             .map(a => a.payload.url);
     };
 
-    const images = getImages();
+    const imageUrls = getImages();
 
-    if (images.length > 0 && !prompt) return reply("add a caption.");
-    if (!prompt && images.length === 0) return reply("say something.");
-
-    if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
+    if (!message && imageUrls.length === 0) return reply("usage: gemini <message> or send images");
 
     try {
-        const payload = {
-            senderid: uid,
-            message: prompt,
-            cookies: { "__Secure-1PSID": cookie.trim() }
-        };
+        const res = await axios.post(
+            "https://yaya-q598.onrender.com/gemini",
+            {
+                senderid: senderId,
+                message: message || "",
+                cookies: GEMINI_COOKIES,
+                urls: imageUrls
+            },
+            { headers: { "Content-Type": "application/json" }, timeout: 60000 }
+        );
 
-        if (images.length > 0) payload.urls = images;
-
-        const res = await http.post("https://yaya-q598.onrender.com/gemini", payload);
-        
         if (res.data?.response) {
             reply(res.data.response);
         } else {
-            reply("no response.");
+            reply("No response from Gemini.");
         }
-
-    } catch (error) {
-        reply("server error.");
-    } finally {
-        if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
+    } catch (e) {
+        reply("An error occurred while processing your request. Try again or type 'clear'.");
     }
 };
