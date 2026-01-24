@@ -7,7 +7,7 @@ const MIMO_COOKIE = "serviceToken=lBp+en8jmZclRZ3zFZn3GIPb4kmgYOGhvB0cIBNd/Sku52
 module.exports.config = {
     name: "mimoai",
     author: "Sethdico",
-    version: "3.4",
+    version: "4.5",
     category: "AI",
     description: "mimo ai studio scrape test",
     adminOnly: false,
@@ -23,21 +23,26 @@ module.exports.run = async function ({ event, args, api, reply }) {
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
 
     try {
-        let history = await db.getHistory(uid);
-        let convoId = (history && history.convoId) || crypto.randomBytes(16).toString('hex');
+        let history = await db.getHistory(uid) || {};
+        let convoId = history.convoId || crypto.randomBytes(16).toString('hex');
+        let prevMsgId = history.lastMsgId || "";
+
+        const msgId = crypto.randomBytes(16).toString('hex');
 
         const payload = {
-            msgId: crypto.randomBytes(16).toString('hex'),
+            msgId: msgId,
             conversationId: convoId,
+            query: prompt,
             isEditedQuery: false,
+            previousDialogueId: prevMsgId,
             modelConfig: {
+                model: "mimo-v2-flash-studio", 
                 enableThinking: true,
                 temperature: 0.8,
                 topP: 0.95,
                 webSearchStatus: "enabled"
             },
-            multiMedias: [],
-            query: prompt
+            multiMedias: []
         };
 
         const headers = {
@@ -47,7 +52,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
             "Referer": "https://aistudio.xiaomimimo.com/",
             "Origin": "https://aistudio.xiaomimimo.com",
             "X-Timezone": "Asia/Manila",
-            "Accept": "application/json, text/plain, */*"
+            "Accept": "*/*"
         };
 
         const endpoint = "https://aistudio.xiaomimimo.com/open-apis/bot/chat?xiaomichatbot_ph=%2BK5PkbpTv5L5nG9sYVEoRw%3D%3D";
@@ -70,14 +75,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
         if (cleanText) {
             reply(`📱 **Mimo Studio**\n────────────────\n${cleanText}`);
-            await db.setHistory(uid, { convoId: convoId });
+            await db.setHistory(uid, { convoId: convoId, lastMsgId: msgId });
         } else {
-            reply("⚠️ Model error. Try again or check if the session is still active in your browser.");
+            reply("⚠️ No response content. The session might be closed.");
         }
 
     } catch (e) {
-        console.error("Mimo Error:", e.message);
-        reply("❌ Request failed. The server might have blocked the bot.");
+        reply("❌ Request failed. Session or cookie expired.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }
