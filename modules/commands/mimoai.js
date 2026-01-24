@@ -7,7 +7,7 @@ const MIMO_COOKIE = "serviceToken=lBp+en8jmZclRZ3zFZn3GIPb4kmgYOGhvB0cIBNd/Sku52
 module.exports.config = {
     name: "mimoai",
     author: "Sethdico",
-    version: "3.2",
+    version: "3.3",
     category: "AI",
     description: "mimo ai studio scrape test",
     adminOnly: false,
@@ -26,19 +26,19 @@ module.exports.run = async function ({ event, args, api, reply }) {
         let history = await db.getHistory(uid);
         let convoId = (history && history.convoId) || crypto.randomBytes(16).toString('hex');
 
+        // Strictly following your screenshot's payload structure
         const payload = {
-            query: prompt,
-            model: "mimo-v2",
             msgId: crypto.randomBytes(16).toString('hex'),
             conversationId: convoId,
             isEditedQuery: false,
-            multiMedias: [],
             modelConfig: {
-                enableThinking: true,
+                enableThinking: false,
                 temperature: 0.8,
                 topP: 0.95,
-                webSearchStatus: "enabled"
-            }
+                webSearchStatus: "disabled"
+            },
+            multiMedias: [],
+            query: prompt
         };
 
         const headers = {
@@ -48,10 +48,12 @@ module.exports.run = async function ({ event, args, api, reply }) {
             "Referer": "https://aistudio.xiaomimimo.com/",
             "Origin": "https://aistudio.xiaomimimo.com",
             "X-Timezone": "Asia/Manila",
-            "Accept": "*/*"
+            "Accept": "application/json, text/plain, */*"
         };
 
+        // Note: The xiaomichatbot_ph in the URL must match your cookie's value
         const endpoint = "https://aistudio.xiaomimimo.com/open-apis/bot/chat?xiaomichatbot_ph=%2BK5PkbpTv5L5nG9sYVEoRw%3D%3D";
+        
         const res = await http.post(endpoint, payload, { headers });
 
         let rawData = res.data;
@@ -62,6 +64,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
             if (matches.length > 0) {
                 const combined = matches.map(m => m[1]).join("");
                 try {
+                    // This fixes the \n and other escaped characters
                     cleanText = JSON.parse(`"${combined}"`);
                 } catch (e) {
                     cleanText = combined;
@@ -73,12 +76,11 @@ module.exports.run = async function ({ event, args, api, reply }) {
             reply(`📱 **Mimo Studio**\n────────────────\n${cleanText}`);
             await db.setHistory(uid, { convoId: convoId });
         } else {
-            reply("⚠️ Response error. The session might be invalid or the model is busy.");
+            reply("⚠️ Session error. Possible expired cookie or changed API structure.");
         }
 
     } catch (e) {
-        console.error("Mimo Error:", e.message);
-        reply("Request failed. Connection error or expired cookie.");
+        reply("❌ Request failed. Mimo might have blocked the connection.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }
