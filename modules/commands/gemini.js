@@ -35,14 +35,11 @@ module.exports.run = async function ({ event, args, reply }) {
             messages: [{ role: "user", content: content }],
             tools: [{ type: "function", function: { name: "google_search" } }]
         }, {
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json"
-            }
+            headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" }
         });
 
         const answer = res.data?.choices?.[0]?.message?.content;
-        reply(answer || "no response.");
+        reply(`✨ **Gemini 2.5 Flash Lite**\n────────────────\n${answer || "no response."}`);
 
     } catch (e) {
         reply("api error.");
