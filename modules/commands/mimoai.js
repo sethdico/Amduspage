@@ -2,14 +2,12 @@ const { http } = require("../utils");
 const db = require("../core/database");
 const crypto = require("crypto");
 
-const MIMO_COOKIE = "serviceToken=lBp+en8jmZclRZ3zFZn3GIPb4kmgYOGhvB0cIBNd/Sku52azzvjlRCsn/eUHplqBNfxIRtTZusweNz6FGsaxYCmN1GaL/zyrc/VO7l4f1QTkJwfOufm2rngUgDeOQc3qIqfdKl/rHC9jwBhZrvCF/c0qqd4X0Wzy3Z7aHxlLXpTrBx9QDGg7mtVdtYu9SCjb5C8VRYxFBo5Cy7iQamJhbHrPpa7ziud7xXIjK4uK/SaM/j9aw8mbCdEvz3aJFJ8vUotStEudqWKAJdKJl53Skc1tSFpAU5AK8aWDi8WO5X7RlMkEgvFx2uUwGOBk8hbWu478qGmTeG0WOebabuVTcQGn2E65CotkbXJWErj3uiQ0VqhDBqvbO3OkZkB6hdh2; userId=6851668485; xiaomichatbot_ph=+K5PkbpTv5L5nG9sYVEoRw==;";
-
 module.exports.config = {
     name: "mimoai",
     author: "Sethdico",
-    version: "4.5",
+    version: "5.0",
     category: "AI",
-    description: "mimo ai studio scrape test",
+    description: "experimental ai with web search and long-term memory.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -18,8 +16,11 @@ module.exports.config = {
 module.exports.run = async function ({ event, args, api, reply }) {
     const prompt = args.join(" ").trim();
     const uid = event.sender.id;
+    const cookie = process.env.MIMO_STUDIO_COOKIE;
 
-    if (!prompt) return reply("What's on your mind?");
+    if (!cookie) return reply("⚠️ missing cookie in .env");
+    if (!prompt) return reply("say something.");
+
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
 
     try {
@@ -46,42 +47,42 @@ module.exports.run = async function ({ event, args, api, reply }) {
         };
 
         const headers = {
-            "Cookie": MIMO_COOKIE,
+            "Cookie": cookie,
             "Content-Type": "application/json",
             "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Mobile Safari/537.36",
             "Referer": "https://aistudio.xiaomimimo.com/",
             "Origin": "https://aistudio.xiaomimimo.com",
-            "X-Timezone": "Asia/Manila",
-            "Accept": "*/*"
+            "X-Timezone": "Asia/Manila"
         };
 
-        const endpoint = "https://aistudio.xiaomimimo.com/open-apis/bot/chat?xiaomichatbot_ph=%2BK5PkbpTv5L5nG9sYVEoRw%3D%3D";
-        const res = await http.post(endpoint, payload, { headers });
+        const res = await http.post("https://aistudio.xiaomimimo.com/open-apis/bot/chat?xiaomichatbot_ph=%2BK5PkbpTv5L5nG9sYVEoRw%3D%3D", payload, { headers });
 
-        let rawData = res.data;
-        let cleanText = "";
+        if (typeof res.data !== "string") return reply("⚠️ invalid response.");
 
-        if (typeof rawData === "string") {
-            const matches = [...rawData.matchAll(/"content":"(.*?)"/g)];
-            if (matches.length > 0) {
-                const combined = matches.map(m => m[1]).join("");
-                try {
-                    cleanText = JSON.parse(`"${combined}"`);
-                } catch (e) {
-                    cleanText = combined;
-                }
-            }
+        const matches = [...res.data.matchAll(/"content":"(.*?)"/g)];
+        let fullText = matches.map(m => m[1]).join("");
+
+        fullText = fullText
+            .replace(/\\n/g, "\n")
+            .replace(/\\u0000/g, "")
+            .replace(/\[DONE\]/g, "")
+            .replace(/^\d+webSearch/, "")
+            .trim();
+
+        let finalAnswer = fullText;
+        if (fullText.includes("</think>")) {
+            finalAnswer = fullText.split("</think>")[1].trim();
         }
 
-        if (cleanText) {
-            reply(`📱 **Mimo Studio**\n────────────────\n${cleanText}`);
+        if (finalAnswer) {
+            reply(`📱 **Mimo Studio**\n────────────────\n${finalAnswer}`);
             await db.setHistory(uid, { convoId: convoId, lastMsgId: msgId });
         } else {
-            reply("⚠️ No response content. The session might be closed.");
+            reply("⚠️ session timed out.");
         }
 
     } catch (e) {
-        reply("❌ Request failed. Session or cookie expired.");
+        reply("❌ connection error.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }
