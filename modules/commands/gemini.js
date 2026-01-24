@@ -3,9 +3,9 @@ const axios = require("axios");
 module.exports.config = {
     name: "gemini",
     author: "Sethdico",
-    version: "4.3",
+    version: "5.2",
     category: "AI",
-    description: "Gemini 3 Pro with multi image support and fallback",
+    description: "Access Gemini 3 Pro with support for multiple image analysis and conversation history.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -16,7 +16,9 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const uid = event.sender.id;
     const cookie = process.env.GEMINI_COOKIE;
 
-    if (!cookie) return reply("no cookie found in the settings. i can't talk to gemini without it.");
+    if (!cookie) {
+        return reply("The Gemini cookie is missing from the server configuration.");
+    }
 
     if (["clear", "reset", "forget"].includes(prompt.toLowerCase())) {
         try {
@@ -25,20 +27,22 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 message: "clear",
                 cookies: { "__Secure-1PSID": cookie }
             });
-            return reply(res.data.message || "memory wiped. starting fresh.");
-        } catch (e) {
-            return reply("couldn't clear the chat memory. the server might be lagging.");
+            return reply("Conversation history has been successfully cleared.");
+        } catch (error) {
+            return reply("An error occurred while attempting to clear the conversation history.");
         }
     }
 
-    const repliedImages = event.message?.reply_to?.attachments?.filter(att => att.type === "image").map(att => att.payload.url) || [];
+    const images = event.message?.reply_to?.attachments
+        ?.filter(att => att.type === "image")
+        .map(att => att.payload.url) || [];
 
-    if (repliedImages.length === 0 && !prompt) {
-        return reply("reply to an image or just ask me something.");
+    if (images.length > 0 && !prompt) {
+        return reply("Please provide instructions or a question regarding the attached image.");
     }
 
-    if (repliedImages.length > 0 && !prompt) {
-        return reply("i see the pic, but what should i do with it? give me some instructions.");
+    if (!prompt && images.length === 0) {
+        return reply("Please provide a prompt or reply to an image with instructions.");
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
@@ -47,30 +51,31 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const payload = {
             senderid: uid,
             message: prompt,
-            cookies: { "__Secure-1PSID": cookie }
+            cookies: { "__Secure-1PSID": cookie.trim() }
         };
 
-        if (repliedImages.length > 0) {
-            payload.urls = repliedImages;
+        if (images.length > 0) {
+            payload.urls = images;
         }
 
         const res = await axios.post("https://yaya-q598.onrender.com/gemini", payload);
-        const answer = res.data.response;
+        const { response, fallback } = res.data;
 
-        if (answer) {
-            reply(answer);
+        if (response) {
+            const modelLabel = fallback ? "Gemini 3 Flash" : "Gemini 3 Pro";
+            reply(`[${modelLabel}]\n\n${response}`);
         } else {
-            reply("i blanked out. gemini didn't send anything back.");
+            reply("I did not receive a response from Gemini. Please try again.");
         }
 
     } catch (error) {
-        const errorData = error.response?.data;
+        const errorString = JSON.stringify(error.response?.data || "");
 
-        if (JSON.stringify(errorData).includes(")]}'")) {
-            return reply("my gemini session expired. you can message the owner about it or just wait for him to notice and update the cookie.");
+        if (errorString.includes(")]}'")) {
+            return reply("The Gemini session has expired. Please notify the administrator to update the cookie.");
         }
 
-        reply("i zoned out. the server is acting up or the session is dead. try again later or wait for an update.");
+        reply("The server encountered an error while processing your request. Please try again later.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }
