@@ -1,9 +1,9 @@
-const axios = require("axios");
+const { http } = require("../utils");
 
 module.exports.config = {
     name: "copilot",
     author: "Sethdico",
-    version: "8.0",
+    version: "8.1",
     category: "AI",
     description: "Microsoft Copilot with Sources & Carousel",
     adminOnly: false,
@@ -31,7 +31,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
 
     try {
-        const response = await axios.get("https://api-library-kohi.onrender.com/api/copilot", {
+        const response = await http.get("https://api-library-kohi.onrender.com/api/copilot", {
             params: { prompt: prompt, model: model, user: uid }
         });
 
