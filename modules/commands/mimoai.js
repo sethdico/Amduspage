@@ -7,7 +7,7 @@ const MIMO_COOKIE = "serviceToken=lBp+en8jmZclRZ3zFZn3GIPb4kmgYOGhvB0cIBNd/Sku52
 module.exports.config = {
     name: "mimoai",
     author: "Sethdico",
-    version: "3.3",
+    version: "3.4",
     category: "AI",
     description: "mimo ai studio scrape test",
     adminOnly: false,
@@ -26,16 +26,15 @@ module.exports.run = async function ({ event, args, api, reply }) {
         let history = await db.getHistory(uid);
         let convoId = (history && history.convoId) || crypto.randomBytes(16).toString('hex');
 
-        // Strictly following your screenshot's payload structure
         const payload = {
             msgId: crypto.randomBytes(16).toString('hex'),
             conversationId: convoId,
             isEditedQuery: false,
             modelConfig: {
-                enableThinking: false,
+                enableThinking: true,
                 temperature: 0.8,
                 topP: 0.95,
-                webSearchStatus: "disabled"
+                webSearchStatus: "enabled"
             },
             multiMedias: [],
             query: prompt
@@ -51,9 +50,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
             "Accept": "application/json, text/plain, */*"
         };
 
-        // Note: The xiaomichatbot_ph in the URL must match your cookie's value
         const endpoint = "https://aistudio.xiaomimimo.com/open-apis/bot/chat?xiaomichatbot_ph=%2BK5PkbpTv5L5nG9sYVEoRw%3D%3D";
-        
         const res = await http.post(endpoint, payload, { headers });
 
         let rawData = res.data;
@@ -64,7 +61,6 @@ module.exports.run = async function ({ event, args, api, reply }) {
             if (matches.length > 0) {
                 const combined = matches.map(m => m[1]).join("");
                 try {
-                    // This fixes the \n and other escaped characters
                     cleanText = JSON.parse(`"${combined}"`);
                 } catch (e) {
                     cleanText = combined;
@@ -76,11 +72,12 @@ module.exports.run = async function ({ event, args, api, reply }) {
             reply(`📱 **Mimo Studio**\n────────────────\n${cleanText}`);
             await db.setHistory(uid, { convoId: convoId });
         } else {
-            reply("⚠️ Session error. Possible expired cookie or changed API structure.");
+            reply("⚠️ Model error. Try again or check if the session is still active in your browser.");
         }
 
     } catch (e) {
-        reply("❌ Request failed. Mimo might have blocked the connection.");
+        console.error("Mimo Error:", e.message);
+        reply("❌ Request failed. The server might have blocked the bot.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }
