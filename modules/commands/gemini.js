@@ -1,67 +1,48 @@
-const axios = require("axios");
+const { http } = require("../utils");
 
 module.exports.config = {
     name: "gemini",
-    author: "Jerome",
-    version: "2.0",
+    author: "Sethdico",
+    version: "1.0",
     category: "AI",
-    description: "Chat with Gemini (text + multi-image support)",
+    description: "gemini 2.5 flash lite",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
 };
 
 module.exports.run = async function ({ event, args, reply }) {
-    const senderId = event.sender.id;
-    const message = args.join(" ").trim();
+    const prompt = args.join(" ").trim();
+    const apiKey = process.env.POLLI_API_KEY;
 
-    const GEMINI_COOKIES = {
-        "__Secure-1PSID": process.env.GEMINI_COOKIE
-    };
+    if (!apiKey) return reply("missing env key.");
 
-    if (message.toLowerCase() === "clear") {
-        try {
-            await axios.post("https://yaya-q598.onrender.com/gemini", {
-                senderid: senderId,
-                message: "clear",
-                cookies: GEMINI_COOKIES
-            }, { headers: { "Content-Type": "application/json" } });
-            return reply("Conversation cleared successfully.");
-        } catch (e) {
-            return reply("Failed to clear conversation.");
-        }
-    }
+    const replied = event.message?.reply_to?.attachments?.find(a => a.type === "image");
 
-    const getImages = () => {
-        const current = event.message?.attachments || [];
-        const replied = event.message?.reply_to?.attachments || [];
-        return [...current, ...replied]
-            .filter(a => a.type === "image")
-            .map(a => a.payload.url);
-    };
-
-    const imageUrls = getImages();
-
-    if (!message && imageUrls.length === 0) return reply("usage: gemini <message> or send images");
+    if (!replied) return reply("reply to an image.");
+    if (!prompt) return reply("add a caption.");
 
     try {
-        const res = await axios.post(
-            "https://yaya-q598.onrender.com/gemini",
-            {
-                senderid: senderId,
-                message: message || "",
-                cookies: GEMINI_COOKIES,
-                urls: imageUrls
-            },
-            { headers: { "Content-Type": "application/json" }, timeout: 60000 }
-        );
+        const res = await http.post("https://gen.pollinations.ai/v1/chat/completions", {
+            model: "gemini-fast",
+            messages: [{
+                role: "user",
+                content: [
+                    { type: "text", text: prompt },
+                    { type: "image_url", image_url: { url: replied.payload.url } }
+                ]
+            }]
+        }, {
+            headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json"
+            }
+        });
 
-        if (res.data?.response) {
-            reply(res.data.response);
-        } else {
-            reply("No response from Gemini.");
-        }
+        const answer = res.data?.choices?.[0]?.message?.content;
+        reply(answer || "no response.");
+
     } catch (e) {
-        reply("An error occurred while processing your request. Try again or type 'clear'.");
+        reply("api error.");
     }
 };
