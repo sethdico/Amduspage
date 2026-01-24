@@ -3,9 +3,9 @@ const axios = require("axios");
 module.exports.config = {
     name: "gemini",
     author: "Sethdico",
-    version: "4.0",
+    version: "4.3",
     category: "AI",
-    description: "Gemini 3 Pro with multi-image vision support",
+    description: "Gemini 3 Pro with multi image support and fallback",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -16,37 +16,29 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const uid = event.sender.id;
     const cookie = process.env.GEMINI_COOKIE;
 
-    if (!cookie) return reply("cookie's missing.");
+    if (!cookie) return reply("no cookie found in the settings. i can't talk to gemini without it.");
 
     if (["clear", "reset", "forget"].includes(prompt.toLowerCase())) {
         try {
-            await axios.post("https://yaya-q598.onrender.com/gemini", {
+            const res = await axios.post("https://yaya-q598.onrender.com/gemini", {
                 senderid: uid,
                 message: "clear",
                 cookies: { "__Secure-1PSID": cookie }
             });
-            return reply("memory wiped.");
+            return reply(res.data.message || "memory wiped. starting fresh.");
         } catch (e) {
-            return reply("failed to reset.");
+            return reply("couldn't clear the chat memory. the server might be lagging.");
         }
     }
 
-    const images = [];
-    const attachments = [
-        ...(event.message?.attachments || []), 
-        ...(event.message?.reply_to?.attachments || [])
-    ];
-    
-    attachments.forEach(att => {
-        if (att.type === "image") images.push(att.payload.url);
-    });
+    const repliedImages = event.message?.reply_to?.attachments?.filter(att => att.type === "image").map(att => att.payload.url) || [];
 
-    if (images.length > 0 && !prompt) {
-        return reply("reply to your image alongside with instruction.");
+    if (repliedImages.length === 0 && !prompt) {
+        return reply("reply to an image or just ask me something.");
     }
 
-    if (!prompt && images.length === 0) {
-        return reply("what's on your mind?");
+    if (repliedImages.length > 0 && !prompt) {
+        return reply("i see the pic, but what should i do with it? give me some instructions.");
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
@@ -58,40 +50,27 @@ module.exports.run = async function ({ event, args, api, reply }) {
             cookies: { "__Secure-1PSID": cookie }
         };
 
-        if (images.length > 0) {
-            payload.urls = images;
+        if (repliedImages.length > 0) {
+            payload.urls = repliedImages;
         }
 
-        const res = await axios.post("https://yaya-q598.onrender.com/gemini", payload, {
-            headers: { "Content-Type": "application/json" },
-            timeout: 60000
-        });
+        const res = await axios.post("https://yaya-q598.onrender.com/gemini", payload);
+        const answer = res.data.response;
 
-        const { response, fallback, model } = res.data;
-
-        if (response) {
-            const status = fallback ? "flash" : "pro";
-            reply(`[gemini 3 ${status}]\n\n${response}`);
+        if (answer) {
+            reply(answer);
         } else {
-            reply("got no response. try again.");
+            reply("i blanked out. gemini didn't send anything back.");
         }
 
     } catch (error) {
-        const status = error.response?.status;
         const errorData = error.response?.data;
-        
-        console.error("Gemini Error Detail:", errorData || error.message);
 
-        if (status === 401 || (errorData && JSON.stringify(errorData).includes("cookie"))) {
-            return reply("session expired. need a new cookie.");
-        }
-        
-        if (status === 400) {
-            return reply("invalid request. maybe the image is unreadable.");
+        if (JSON.stringify(errorData).includes(")]}'")) {
+            return reply("my gemini session expired. you can message the owner about it or just wait for him to notice and update the cookie.");
         }
 
-        reply("the server encountered an error. try again later.");
-
+        reply("i zoned out. the server is acting up or the session is dead. try again later or wait for an update.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }
