@@ -7,9 +7,9 @@ const MIMO_COOKIE = "serviceToken=lBp+en8jmZclRZ3zFZn3GIPb4kmgYOGhvB0cIBNd/Sku52
 module.exports.config = {
     name: "mimoai",
     author: "Sethdico",
-    version: "3.0",
+    version: "3.2",
     category: "AI",
-    description: "Mimo AI Studio scrape test",
+    description: "mimo ai studio scrape test",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -24,11 +24,12 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
     try {
         let history = await db.getHistory(uid);
-        let convoId = (history && history.convoId) || crypto.randomUUID();
+        let convoId = (history && history.convoId) || crypto.randomBytes(16).toString('hex');
 
         const payload = {
             query: prompt,
-            msgId: crypto.randomUUID(),
+            model: "mimo-v2",
+            msgId: crypto.randomBytes(16).toString('hex'),
             conversationId: convoId,
             isEditedQuery: false,
             multiMedias: [],
@@ -60,7 +61,11 @@ module.exports.run = async function ({ event, args, api, reply }) {
             const matches = [...rawData.matchAll(/"content":"(.*?)"/g)];
             if (matches.length > 0) {
                 const combined = matches.map(m => m[1]).join("");
-                cleanText = JSON.parse(`"${combined}"`);
+                try {
+                    cleanText = JSON.parse(`"${combined}"`);
+                } catch (e) {
+                    cleanText = combined;
+                }
             }
         }
 
@@ -68,12 +73,12 @@ module.exports.run = async function ({ event, args, api, reply }) {
             reply(`📱 **Mimo Studio**\n────────────────\n${cleanText}`);
             await db.setHistory(uid, { convoId: convoId });
         } else {
-            reply("I couldn't parse the response. The session might be dead.");
+            reply("⚠️ Response error. The session might be invalid or the model is busy.");
         }
 
     } catch (e) {
         console.error("Mimo Error:", e.message);
-        reply("Request failed. The cookie might have expired.");
+        reply("Request failed. Connection error or expired cookie.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }
