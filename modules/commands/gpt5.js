@@ -16,25 +16,15 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const uid = event.sender.id;
 
     if (!prompt) return reply("yo, what's on your mind?");
-
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
 
     try {
         const res = await axios.get("https://api-library-kohi.onrender.com/api/pollination-ai", {
-            params: {
-                prompt: prompt,
-                model: "openai-large",
-                user: uid
-            }
+            params: { prompt: prompt, model: "openai-large", user: uid }
         });
 
         const answer = res.data.data;
-
-        if (answer) {
-            reply(answer);
-        } else {
-            reply("got no response, try again.");
-        }
+        reply(`🧠 **GPT-5.2**\n────────────────\n${answer || "got no response."}`);
 
     } catch (e) {
         reply("server is busy right now.");
