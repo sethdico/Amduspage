@@ -5,9 +5,9 @@ const crypto = require("crypto");
 module.exports.config = {
     name: "mimoai",
     author: "Sethdico",
-    version: "5.0",
+    version: "5.6",
     category: "AI",
-    description: "experimental ai with web search and long-term memory.",
+    description: "mimo ai studio scrape test",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -18,7 +18,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const uid = event.sender.id;
     const cookie = process.env.MIMO_STUDIO_COOKIE;
 
-    if (!cookie) return reply("⚠️ missing cookie in .env");
+    if (!cookie) return reply(" Missing MIMO_STUDIO_COOKIE in .env");
     if (!prompt) return reply("say something.");
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
@@ -52,12 +52,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
             "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Mobile Safari/537.36",
             "Referer": "https://aistudio.xiaomimimo.com/",
             "Origin": "https://aistudio.xiaomimimo.com",
-            "X-Timezone": "Asia/Manila"
+            "X-Timezone": "Asia/Manila",
+            "Accept": "*/*"
         };
 
         const res = await http.post("https://aistudio.xiaomimimo.com/open-apis/bot/chat?xiaomichatbot_ph=%2BK5PkbpTv5L5nG9sYVEoRw%3D%3D", payload, { headers });
 
-        if (typeof res.data !== "string") return reply("⚠️ invalid response.");
+        if (typeof res.data !== "string") return reply(" invalid response format.");
 
         const matches = [...res.data.matchAll(/"content":"(.*?)"/g)];
         let fullText = matches.map(m => m[1]).join("");
@@ -78,11 +79,11 @@ module.exports.run = async function ({ event, args, api, reply }) {
             reply(`📱 **Mimo Studio**\n────────────────\n${finalAnswer}`);
             await db.setHistory(uid, { convoId: convoId, lastMsgId: msgId });
         } else {
-            reply("⚠️ session timed out.");
+            reply(" session timed out or model refused to answer.");
         }
 
     } catch (e) {
-        reply("❌ connection error.");
+        reply("connection error. go to the site and get a fresh cookie.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }
