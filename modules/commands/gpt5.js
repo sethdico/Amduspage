@@ -1,11 +1,11 @@
-const axios = require("axios");
+const { http } = require("../utils");
 
 module.exports.config = {
     name: "gpt5",
     author: "Sethdico",
-    version: "2.0",
+    version: "2.1",
     category: "AI",
-    description: "ChatGPT-5.2 conversational and real-time info by Pollination API",
+    description: "ChatGPT-5.2 conversational and real-time info",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -19,7 +19,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
 
     try {
-        const res = await axios.get("https://api-library-kohi.onrender.com/api/pollination-ai", {
+        const res = await http.get("https://api-library-kohi.onrender.com/api/pollination-ai", {
             params: { prompt: prompt, model: "openai-large", user: uid }
         });
 
