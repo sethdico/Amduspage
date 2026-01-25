@@ -1,5 +1,5 @@
-const PRIMARY_CHIPPAI_API = 'https://amdusbot-10037381.chipp.ai/api/chat';
-const FALLBACK_CHIPPAI_API = 'https://app.chipp.ai/api/chat';
+const PRIMARY_CHIPPAI_API = 'https://app.chipp.ai/api/chat';
+const FALLBACK_CHIPPAI_API = 'https://amdusbot-10037381.chipp.ai/api/chat';
 const APP_ID = 'Amdusbot-10037381';
 const API_TIMEOUT_MS = 45000;
 const DEFAULT_ERROR_MSG = "I'm having trouble connecting right now. Please try again.";
