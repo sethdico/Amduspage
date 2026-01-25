@@ -4,7 +4,7 @@ const db = require("../../core/database");
 
 module.exports.config = {
     name: "amdus",
-    author: "sethdico",
+    author: "sethdico & jerome",
     version: "21.1",
     category: "AI",
     description: "Main Amdus AI. Real-time info, image recognition/generation, file generation.",
