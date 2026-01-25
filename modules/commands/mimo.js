@@ -5,9 +5,9 @@ const crypto = require("crypto");
 module.exports.config = {
     name: "mimo",
     author: "Sethdico",
-    version: "6.2",
+    version: "6.4",
     category: "AI",
-    description: "experimental Mimo V2 Flash scrape with visual rag and conversational memory.",
+    description: "experimental Mimo V2 Flash with visual rag and conversational memory.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -50,9 +50,11 @@ module.exports.run = async function ({ event, args, api, reply }) {
             } catch (err) {}
         }
 
-        const finalPrompt = visualDescription 
-            ? `[VISUAL CONTEXT: ${visualDescription}]\n\nUser Question: ${prompt || "Analyze this."}`
-            : prompt;
+        let finalPrompt = "Always reply in English. " + prompt;
+        
+        if (visualDescription) {
+            finalPrompt = `[VISUAL CONTEXT: ${visualDescription}]\n\nAlways reply in English. User Question: ${prompt || "Analyze this."}`;
+        }
 
         const msgId = crypto.randomBytes(16).toString('hex');
         const endpoint = "https://aistudio.xiaomimimo.com/open-apis/bot/chat?xiaomichatbot_ph=%2BK5PkbpTv5L5nG9sYVEoRw%3D%3D";
@@ -104,7 +106,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         }
 
     } catch (e) {
-        reply("connection error. check cookie.");
+        reply("❌ connection error. check cookie.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }
