@@ -1,5 +1,4 @@
 async function readStream(response) {
-    if (!response.body) return await response.text();
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let full = '';
@@ -19,6 +18,8 @@ async function readStream(response) {
 }
 
 function parseEventStream(raw) {
+    if (!raw) return { message: "", images: [] };
+
     const events = raw.split(/\r?\n/)
         .filter(line => line.trim().startsWith('data:'))
         .map(line => {
@@ -49,7 +50,7 @@ function parseEventStream(raw) {
 
     const urlRegex = /https:\/\/storage\.googleapis\.com\/chipp-images\/[^\s)\]]+/gi;
     const found = resultMsg.match(urlRegex);
-    if (found) found.forEach(u => images.add(u.replace(/[).,]+$/, '')));
+    if (found) found.forEach(url => images.add(url.replace(/[).,]+$/, '')));
 
     let finalMsg = resultMsg.trim() || toolBuffer.trim();
     if (finalMsg.includes("</think>")) finalMsg = finalMsg.split("</think>")[1].trim();
@@ -57,7 +58,11 @@ function parseEventStream(raw) {
     return { message: finalMsg, images: [...images] };
 }
 
-async function askChipp(prompt, url, history = []) {
+async function askChipp(prompt, url, history = [], session) {
+    const API_URL = process.env.CHIPP_API_URL;
+    const APP_ID = process.env.CHIPP_APP_ID;
+    const SESSION_ID = session?.chatSessionId || process.env.CHIPP_SESSION_ID;
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 45000);
 
@@ -65,27 +70,27 @@ async function askChipp(prompt, url, history = []) {
     if (url) content = `[image: ${url}]\n\n${content}`;
 
     try {
-        const response = await fetch(process.env.CHIPP_API_URL, {
+        const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
                 'accept': '*/*',
                 'content-type': 'application/json',
-                'x-app-name-id': process.env.CHIPP_APP_ID,
+                'x-app-name-id': APP_ID,
                 'user-agent': 'Mozilla/5.0'
             },
             body: JSON.stringify({
                 id: Math.random().toString(36).slice(2),
-                chatSessionId: process.env.CHIPP_SESSION_ID,
+                chatSessionId: SESSION_ID,
                 messages: [...history, { role: "user", content: content }]
             }),
             signal: controller.signal
         });
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const raw = await readStream(response);
-        return parseEventStream(raw);
+        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+        const rawData = await readStream(response);
+        return parseEventStream(rawData);
     } catch (e) {
-        return { error: true, message: e.message };
+        return { error: true, message: `Connection failed: ${e.message}` };
     } finally {
         clearTimeout(timeout);
     }
