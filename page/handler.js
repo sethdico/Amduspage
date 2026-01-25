@@ -9,7 +9,6 @@ module.exports = async function (event, api) {
     const isAdmin = global.ADMINS.has(id);
     const now = Date.now();
 
-    // sync user data (buffered)
     try {
         const userInfo = await api.getUserInfo(id).catch(() => ({ name: 'user' }));
         db.syncUser(id, userInfo);
@@ -17,12 +16,10 @@ module.exports = async function (event, api) {
         db.syncUser(id);
     }
 
-    // maintenance check
     if (global.MAINTENANCE_MODE && !isAdmin) {
         return reply(`maintenance mode: ${global.MAINTENANCE_REASON}`);
     }
 
-    // get started
     if (event.postback?.payload === "GET_STARTED_PAYLOAD") {
         return reply("ask questions or type help to see commands.");
     }
@@ -41,7 +38,6 @@ module.exports = async function (event, api) {
     if (command) {
         if (command.config.adminOnly && !isAdmin) return;
 
-        // cooldown
         if (command.config.cooldown && !isAdmin) {
             const key = `${id}-${command.config.name}`;
             const lastUsed = cooldowns.get(key) || 0;
@@ -59,15 +55,13 @@ module.exports = async function (event, api) {
             reply("error executing command."); 
         }
     } 
-    // AI fallback
     else if (body.length > 2) {
-        const ai = global.client.commands.get("ai");
+        const ai = global.client.commands.get("amdus");
         if (ai) {
             try {
                 if (api.sendTypingIndicator) api.sendTypingIndicator(true, id).catch(()=>{});
                 await ai.run({ event, args: body.split(/\s+/), api, reply });
             } catch (e) {
-                // silent fail for ai
             } finally { 
                 if (api.sendTypingIndicator) api.sendTypingIndicator(false, id).catch(()=>{}); 
             }
