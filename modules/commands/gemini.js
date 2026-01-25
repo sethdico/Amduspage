@@ -3,45 +3,69 @@ const { http } = require("../utils");
 module.exports.config = {
     name: "gemini",
     author: "Sethdico",
-    version: "4.0",
+    version: "8.0",
     category: "AI",
-    description: "gemini 2.5 flash lite (vision + search grounded)",
+    description: "gemini 3 pro with multi-image support and automatic flash fallback.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
 };
 
-module.exports.run = async function ({ event, args, reply }) {
+module.exports.run = async function ({ event, args, api, reply }) {
     const prompt = args.join(" ").trim();
-    const apiKey = process.env.POLLI_API_KEY;
+    const uid = event.sender.id;
+    const cookie = process.env.GEMINI_COOKIE;
 
-    if (!apiKey) return reply("missing env key.");
+    const getImages = () => {
+        const current = event.message?.attachments || [];
+        const replied = event.message?.reply_to?.attachments || [];
+        return [...current, ...replied]
+            .filter(a => a.type === "image")
+            .map(a => a.payload.url);
+    };
 
-    const replied = event.message?.reply_to?.attachments?.find(a => a.type === "image");
+    const images = getImages();
 
-    if (!prompt && !replied) return reply("say something.");
+    if (!prompt && images.length === 0) return reply("say something.");
+    if (!cookie) return reply("missing cookie in .env");
 
-    const content = [];
-    if (prompt) content.push({ type: "text", text: prompt });
-    else content.push({ type: "text", text: "describe this image" });
+    if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
 
-    if (replied) {
-        content.push({ type: "image_url", image_url: { url: replied.payload.url } });
+    if (prompt.toLowerCase() === "clear") {
+        try {
+            await http.post("https://yaya-q598.onrender.com/gemini", {
+                senderid: uid,
+                message: "clear",
+                cookies: { "__Secure-1PSID": cookie.trim() }
+            });
+            return reply("history cleared.");
+        } catch (e) {
+            return reply("failed to clear.");
+        } finally {
+            if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
+        }
     }
 
     try {
-        const res = await http.post("https://gen.pollinations.ai/v1/chat/completions", {
-            model: "gemini-fast",
-            messages: [{ role: "user", content: content }],
-            tools: [{ type: "function", function: { name: "google_search" } }]
-        }, {
-            headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" }
-        });
+        const res = await http.post("https://yaya-q598.onrender.com/gemini", {
+            senderid: uid,
+            message: prompt || "describe this",
+            cookies: { "__Secure-1PSID": cookie.trim() },
+            urls: images
+        }, { timeout: 60000 });
 
-        const answer = res.data?.choices?.[0]?.message?.content;
-        reply(`✨ **Gemini 2.5 Flash Lite**\n────────────────\n${answer || "no response."}`);
+        const data = res.data;
 
-    } catch (e) {
-        reply("api error.");
+        if (data?.response) {
+            const modelName = data.fallback ? "Gemini Flash" : "Gemini 3 Pro";
+            reply(`✨ **${modelName}**\n────────────────\n${data.response}`);
+        } else {
+            reply("no response.");
+        }
+
+    } catch (error) {
+        reply("server error.");
+    } finally {
+        if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }
 };
