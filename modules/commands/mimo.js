@@ -5,9 +5,9 @@ const crypto = require("crypto");
 module.exports.config = {
     name: "mimo",
     author: "Sethdico",
-    version: "7.1",
+    version: "8.1",
     category: "AI",
-    description: "conversational Mimo V2 Flasg with visual rag and memory.",
+    description: "Conversational Mimo V2 Flash (website scraped) with visual and text memory.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -20,22 +20,20 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const visionKey = process.env.OPENROUTER2_KEY || process.env.OPENROUTER_KEY;
 
     const attachment = event.message?.reply_to?.attachments?.find(a => ["image", "video"].includes(a.type));
-
-    if (!prompt && !attachment) return reply("say something or reply to an image.");
-    if (!cookie) return reply("⚠️ missing cookie in .env");
+    
+    if (!prompt && !attachment) return reply("Hey! What's on your mind?");
+    if (!cookie) return reply("⚠️ Missing cookie in .env");
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
 
     try {
-        const markers = await db.getHistory(uid) || {};
-        const convoId = markers.convoId || crypto.randomBytes(16).toString('hex');
-        const prevMsgId = markers.lastMsgId || "";
+        let history = await db.getHistory(uid) || [];
+        if (!Array.isArray(history)) history = [];
 
-        let visualDescription = "";
-
+        let visualContext = "";
         if (attachment && visionKey) {
             try {
-                const content = [{ type: "text", text: "describe this media in detail for context." }];
+                const content = [{ type: "text", text: "Describe this media in detail for context." }];
                 const url = attachment.payload.url;
                 if (attachment.type === "video") content.push({ type: "video_url", video_url: { url } });
                 else content.push({ type: "image_url", image_url: { url } });
@@ -46,30 +44,34 @@ module.exports.run = async function ({ event, args, api, reply }) {
                     temperature: 0.2
                 }, { headers: { "Authorization": `Bearer ${visionKey}` } });
 
-                visualDescription = vRes.data?.choices?.[0]?.message?.content || "";
+                visualContext = `[Visual Context: ${vRes.data?.choices?.[0]?.message?.content || "media"}]`;
             } catch (err) {}
         }
+
+        const recentHistory = history.slice(-12); 
+        const conversationString = recentHistory
+            .map(msg => `${msg.role === 'user' ? 'User' : 'Mimo'}: ${msg.content}`)
+            .join("\n");
+
+        let finalQuery = `[System: You are Mimo, a helpful and witty AI assistant. Use the conversation history for context.]\n\n[History]\n${conversationString}\n\n`;
         
-        let queryWithContext = `Always reply in English. ${prompt || "Analyze this."}`;
-        
-        if (visualDescription) {
-            queryWithContext = `[VISUAL CONTEXT: ${visualDescription}]\n\nAlways reply in English. User Question: ${prompt || "Analyze this media."}`;
-        }
+        if (visualContext) finalQuery += `${visualContext}\n`;
+        finalQuery += `User: ${prompt}\nMimo:`;
 
         const msgId = crypto.randomBytes(16).toString('hex');
-        const endpoint = "https://aistudio.xiaomimimo.com/open-apis/bot/chat?xiaomichatbot_ph=%2BK5PkbpTv5L5nG9sYVEoRw%3D%3D";
+        const convoId = crypto.randomBytes(16).toString('hex');
 
-        const res = await http.post(endpoint, {
+        const res = await http.post("https://aistudio.xiaomimimo.com/open-apis/bot/chat?xiaomichatbot_ph=%2BK5PkbpTv5L5nG9sYVEoRw%3D%3D", {
             msgId: msgId,
             conversationId: convoId,
-            query: queryWithContext,
+            query: finalQuery, 
             isEditedQuery: false,
-            previousDialogueId: prevMsgId,
+            previousDialogueId: "",
             modelConfig: {
                 model: "mimo-v2-flash-studio", 
                 enableThinking: true,
-                temperature: 0.8,
-                topP: 0.95,
+                temperature: 0.7,
+                topP: 0.9,
                 webSearchStatus: "enabled"
             },
             multiMedias: []
@@ -84,12 +86,11 @@ module.exports.run = async function ({ event, args, api, reply }) {
             }
         });
 
-        if (typeof res.data !== "string") return reply("⚠️ invalid response.");
-
         const matches = [...res.data.matchAll(/"content":"(.*?)"/g)];
         let fullText = matches.map(m => m[1]).join("")
             .replace(/\\n/g, "\n")
             .replace(/\\u0000/g, "")
+            .replace(/\\"/g, '"')
             .replace(/\[DONE\]/g, "")
             .replace(/^\d+webSearch/, "")
             .trim();
@@ -100,13 +101,17 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
         if (fullText) {
             reply(`📱 **Mimo Studio**\n────────────────\n${fullText}`);
-            await db.setHistory(uid, { convoId, lastMsgId: msgId });
+            
+            recentHistory.push({ role: 'user', content: visualContext ? `${visualContext} ${prompt}` : prompt });
+            recentHistory.push({ role: 'model', content: fullText });
+            
+            await db.setHistory(uid, recentHistory);
         } else {
-            reply("⚠️ session error.");
+            reply("⚠️ Mimo is silent.");
         }
 
     } catch (e) {
-        reply("❌ connection error. refresh cookie.");
+        reply("❌ Connection error. Refresh cookie.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }
