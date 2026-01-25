@@ -4,10 +4,10 @@ const db = require("../../core/database");
 
 module.exports.config = {
     name: "amdus",
-    author: "sethdico",
-    version: "23.0",
+    author: "sethdico & jerome",
+    version: "24.0",
     category: "AI",
-    description: "Main Amdus AI.",
+    description: "Main Amdus AI with real-time info, image recognition/generation and file generation.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 0,
@@ -16,6 +16,7 @@ module.exports.config = {
 module.exports.run = async function ({ event, args, api, reply }) {
     const sender = event.sender.id;
     const prompt = args.join(" ").trim();
+    
     const img = event.message?.attachments?.find(a => a.type === "image")?.payload?.url || 
                 event.message?.reply_to?.attachments?.find(a => a.type === "image")?.payload?.url || "";
 
@@ -29,20 +30,19 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
         const session = getSession(sender);
         
-        // Execute the handler
         const res = await askChipp(prompt, img, history.slice(-10), session);
 
         if (res.error) {
             return reply("⚠️ " + res.message);
         }
 
-        if (!res.message && res.images.length === 0) {
+        if (!res.message && (!res.images || res.images.length === 0)) {
             return reply("⚠️ I received an empty response from the server.");
         }
 
         if (res.message) {
             await reply(res.message);
-            // Save to DB
+            
             history.push({ role: "user", content: prompt });
             history.push({ role: "assistant", content: res.message });
             await db.setHistory(sender, history.slice(-12));
@@ -56,6 +56,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
     } catch (e) {
         console.error("Amdus Run Error:", e);
+        reply("⚠️ Something went wrong. Please try again.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, sender);
     }
