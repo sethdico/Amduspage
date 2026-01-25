@@ -1,47 +1,80 @@
 const { http } = require('../../utils/http');
-const { CHIPP_API_KEY, CHIPP_MODEL, DEBUG_AI } = process.env;
 
-async function askChipp(prompt, url, session) {
-  if (!CHIPP_API_KEY) return { error: true, message: "Missing CHIPP_API_KEY in .env" };
-  if (!CHIPP_MODEL) return { error: true, message: "Missing CHIPP_MODEL in .env" };
+function parseEventStream(raw) {
+    if (!raw) return { message: "", images: [] };
+    
+    const events = raw.split(/\r?\n/)
+        .filter(line => line.trim().startsWith('data:'))
+        .map(line => {
+            try {
+                const jsonStr = line.replace(/^data:\s*/, '').trim();
+                return jsonStr === '[DONE]' ? null : JSON.parse(jsonStr);
+            } catch (e) { return null; }
+        }).filter(Boolean);
 
-  let content = prompt || "describe this image";
-  if (url) content = `[image: ${url}]\n\n${content}`;
+    let resultMsg = '';
+    let toolOutputBuffer = '';
+    const images = new Set();
 
-  const body = {
-    model: CHIPP_MODEL,
-    messages: [
-      { role: "user", content: content }
-    ],
-    chatSessionId: session?.chatSessionId,
-    stream: false,
-    temperature: 0.5,
-    top_p: 1
-  };
+    for (const evt of events) {
+        if (evt.type === 'text-delta' && evt.delta) {
+            resultMsg += evt.delta;
+        } else if (evt.content && typeof evt.content === 'string') {
+            resultMsg += evt.content;
+        }
 
-  if (DEBUG_AI) {
-    try { console.log("askChipp -> body:", JSON.stringify(body, null, 2)); } catch (_) {}
-  }
-
-  try {
-    const res = await http.post("https://app.chipp.ai/api/v1/chat/completions", body, {
-      headers: {
-        "Authorization": `Bearer ${CHIPP_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      timeout: 60000
-    });
-
-    if (DEBUG_AI) {
-      try { console.log("askChipp <- res.data:", JSON.stringify(res.data, null, 2)); } catch(_) {}
+        if (evt.type === 'tool-output-available' && evt.output) {
+            const out = Array.isArray(evt.output) ? evt.output : [evt.output];
+            out.forEach(item => {
+                if (item.type === 'message' && Array.isArray(item.content)) {
+                    item.content.forEach(c => { 
+                        if (c.type === 'output_text') toolOutputBuffer += c.text + '\n'; 
+                    });
+                }
+                if (item.metadata?.screenshotUrl) images.add(item.metadata.screenshotUrl);
+            });
+        }
     }
 
-    return res;
-  } catch (e) {
-    console.error("askChipp error:", e?.message || e);
-    const errorMsg = e.response?.data?.error || "ai request failed";
-    return { error: true, message: errorMsg };
-  }
+    const urlRegex = /https:\/\/storage\.googleapis\.com\/chipp-images\/[^\s)\]]+/gi;
+    const found = resultMsg.match(urlRegex);
+    if (found) found.forEach(url => images.add(url.replace(/[).,]+$/, '')));
+
+    let finalMessage = resultMsg.trim() || toolOutputBuffer.trim();
+
+    if (finalMessage.includes("</think>")) {
+        finalMessage = finalMessage.split("</think>")[1].trim();
+    }
+
+    return { message: finalMessage, images: [...images] };
+}
+
+async function askChipp(prompt, url, history = [], session) {
+    const chatSessionId = session?.chatSessionId || process.env.CHIPP_SESSION_ID;
+
+    let content = prompt || "describe this image";
+    if (url) content = `[image: ${url}]\n\n${content}`;
+
+    const payload = {
+        id: Math.random().toString(36).slice(2),
+        chatSessionId: chatSessionId,
+        messages: [...history, { role: "user", content: content }]
+    };
+
+    try {
+        const response = await http.post(process.env.CHIPP_API_URL, payload, {
+            headers: {
+                'accept': '*/*',
+                'content-type': 'application/json',
+                'x-app-name-id': process.env.CHIPP_APP_ID
+            }
+        });
+
+        const rawData = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+        return parseEventStream(rawData);
+    } catch (e) {
+        return { error: true, message: "Amdus unavailable." };
+    }
 }
 
 module.exports = { askChipp };
