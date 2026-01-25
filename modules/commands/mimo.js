@@ -5,9 +5,9 @@ const crypto = require("crypto");
 module.exports.config = {
     name: "mimo",
     author: "Sethdico",
-    version: "6.4",
+    version: "7.1",
     category: "AI",
-    description: "experimental Mimo V2 Flash with visual rag and conversational memory.",
+    description: "conversational Mimo V2 Flasg with visual rag and memory.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -19,18 +19,18 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const cookie = process.env.MIMO_STUDIO_COOKIE;
     const visionKey = process.env.OPENROUTER2_KEY || process.env.OPENROUTER_KEY;
 
-    const getAttachment = (m) => m?.attachments?.find(a => ["image", "video"].includes(a.type));
-    const attachment = getAttachment(event.message) || getAttachment(event.message?.reply_to);
+    const attachment = event.message?.reply_to?.attachments?.find(a => ["image", "video"].includes(a.type));
 
-    if (!prompt && !attachment) return reply("say something.");
-    if (!cookie) return reply("missing cookie in .env");
+    if (!prompt && !attachment) return reply("say something or reply to an image.");
+    if (!cookie) return reply("⚠️ missing cookie in .env");
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
 
     try {
-        const history = await db.getHistory(uid) || {};
-        const convoId = history.convoId || crypto.randomBytes(16).toString('hex');
-        const prevMsgId = history.lastMsgId || "";
+        const markers = await db.getHistory(uid) || {};
+        const convoId = markers.convoId || crypto.randomBytes(16).toString('hex');
+        const prevMsgId = markers.lastMsgId || "";
+
         let visualDescription = "";
 
         if (attachment && visionKey) {
@@ -49,11 +49,11 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 visualDescription = vRes.data?.choices?.[0]?.message?.content || "";
             } catch (err) {}
         }
-
-        let finalPrompt = "Always reply in English. " + prompt;
+        
+        let queryWithContext = `Always reply in English. ${prompt || "Analyze this."}`;
         
         if (visualDescription) {
-            finalPrompt = `[VISUAL CONTEXT: ${visualDescription}]\n\nAlways reply in English. User Question: ${prompt || "Analyze this."}`;
+            queryWithContext = `[VISUAL CONTEXT: ${visualDescription}]\n\nAlways reply in English. User Question: ${prompt || "Analyze this media."}`;
         }
 
         const msgId = crypto.randomBytes(16).toString('hex');
@@ -62,7 +62,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const res = await http.post(endpoint, {
             msgId: msgId,
             conversationId: convoId,
-            query: finalPrompt,
+            query: queryWithContext,
             isEditedQuery: false,
             previousDialogueId: prevMsgId,
             modelConfig: {
@@ -84,7 +84,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
             }
         });
 
-        if (typeof res.data !== "string") return reply("invalid response.");
+        if (typeof res.data !== "string") return reply("⚠️ invalid response.");
 
         const matches = [...res.data.matchAll(/"content":"(.*?)"/g)];
         let fullText = matches.map(m => m[1]).join("")
@@ -102,11 +102,11 @@ module.exports.run = async function ({ event, args, api, reply }) {
             reply(`📱 **Mimo Studio**\n────────────────\n${fullText}`);
             await db.setHistory(uid, { convoId, lastMsgId: msgId });
         } else {
-            reply("session error.");
+            reply("⚠️ session error.");
         }
 
     } catch (e) {
-        reply("❌ connection error. check cookie.");
+        reply("❌ connection error. refresh cookie.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }
