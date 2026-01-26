@@ -8,7 +8,6 @@ const streamPipeline = promisify(pipeline);
 const axios = require('axios');
 const FormData = require('form-data');
 
-const { askChipp } = require("./handlers");
 const { getSession, saveSession } = require("./session");
 const { parseAI } = require("../../utils/helpers");
 
@@ -44,7 +43,7 @@ async function sendRawAttachment(senderId, buffer, fileName, mimeType, messageBo
 module.exports.config = {
   name: "amdus",
   author: "sethdico",
-  version: "30.0",
+  version: "31.0",
   category: "AI",
   description: "real time info, multi-image vision, generation, and file output.",
   adminOnly: false,
@@ -91,23 +90,22 @@ module.exports.run = async function ({ event, args, api, reply }) {
   try {
     const session = getSession(sender);
     
-    let contentPayload = [];
-    if (prompt) contentPayload.push({ type: "text", text: prompt });
-    else contentPayload.push({ type: "text", text: "Describe this image." });
-
-    mediaUrls.forEach(url => {
-        contentPayload.push({ type: "image_url", image_url: { url: url } });
-    });
+    let finalContent = prompt;
+    if (mediaUrls.length > 0) {
+        const imageTags = mediaUrls.map(url => `[image: ${url}]`).join("\n");
+        finalContent = `${imageTags}\n\n${prompt}`;
+    }
 
     const body = {
         model: CHIPP_MODEL || "newapplication-10035084",
         messages: [
-            { role: "system", content: "You are AmdusBot. Helpful, direct, and capable of analyzing images." },
-            { role: "user", content: contentPayload }
+            { role: "system", content: "identity: you are strictly amdusbot, a messenger bot made by seth asher salinguhay. personality: chill, direct, slightly nonchalant. always use lowercase." },
+            { role: "user", content: finalContent }
         ],
         chatSessionId: session?.chatSessionId,
         stream: false,
-        temperature: 0.5
+        temperature: 0.5,
+        top_p: 1
     };
 
     const res = await http.post("https://app.chipp.ai/api/v1/chat/completions", body, {
