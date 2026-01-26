@@ -7,7 +7,6 @@ module.exports = async function (event, api) {
     const id = event.sender.id;
     const reply = (msg) => api.sendMessage(msg, id);
     const isAdmin = global.ADMINS.has(id);
-    const now = Date.now();
 
     try {
         const userInfo = await api.getUserInfo(id).catch(() => ({ name: 'user' }));
@@ -41,10 +40,10 @@ module.exports = async function (event, api) {
         if (command.config.cooldown && !isAdmin) {
             const key = `${id}-${command.config.name}`;
             const lastUsed = cooldowns.get(key) || 0;
-            const timeLeft = (lastUsed + (command.config.cooldown * 1000)) - now;
+            const timeLeft = (lastUsed + (command.config.cooldown * 1000)) - Date.now();
 
             if (timeLeft > 0) return reply(`wait ${Math.ceil(timeLeft / 1000)}s`);
-            cooldowns.set(key, now);
+            cooldowns.set(key, Date.now());
         }
 
         try {
@@ -55,13 +54,14 @@ module.exports = async function (event, api) {
             reply("error executing command."); 
         }
     } 
-    else if (body.length > 2) {
+    else if (body.length > 1) {
         const ai = global.client.commands.get("amdus");
         if (ai) {
             try {
                 if (api.sendTypingIndicator) api.sendTypingIndicator(true, id).catch(()=>{});
                 await ai.run({ event, args: body.split(/\s+/), api, reply });
             } catch (e) {
+                console.error("AI Fallback Error:", e);
             } finally { 
                 if (api.sendTypingIndicator) api.sendTypingIndicator(false, id).catch(()=>{}); 
             }
