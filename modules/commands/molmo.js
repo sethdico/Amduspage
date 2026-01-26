@@ -3,9 +3,9 @@ const { http } = require("../utils");
 module.exports.config = {
     name: "molmo",
     author: "Sethdico",
-    version: "1.2",
+    version: "2.0",
     category: "AI",
-    description: "Molmo Vision",
+    description: "Molmo Vision (Images & Videos)",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -20,16 +20,16 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
     const getAttachment = (msg) => {
         if (!msg || !msg.attachments) return null;
-        return msg.attachments.find(a => a.type === "image" || a.type === "video");
+        return msg.attachments.find(a => ["image", "video"].includes(a.type));
     };
 
     const attachment = getAttachment(event.message) || getAttachment(event.message?.reply_to);
-    const mediaUrl = attachment?.payload?.url;
 
-    if (!prompt && !mediaUrl) return reply("Send a video or image and ask me to describe it.");
+    if (!prompt && !attachment) return reply("Send or reply to a video/image and ask me to describe it.");
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
 
-    const contentPayload = [{ type: "text", text: prompt || "Describe this media." }];
+    const mediaUrl = attachment?.payload?.url;
+    const contentPayload = [{ type: "text", text: prompt || "Describe this media in detail." }];
 
     if (mediaUrl) {
         if (attachment.type === "video") {
