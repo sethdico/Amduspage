@@ -26,10 +26,13 @@ module.exports = async function (event, api) {
     if (event.message?.is_echo) return;
     
     const body = (event.message?.text || event.postback?.payload || "").trim();
-    if (!body) return;
+    
+    const hasAttachments = event.message?.attachments?.length > 0 || event.message?.reply_to?.attachments?.length > 0;
+    
+    if (!body && !hasAttachments) return;
 
     const args = body.split(/\s+/);
-    const cmdName = args.shift().toLowerCase();
+    const cmdName = args.shift()?.toLowerCase();
     
     const command = global.client.commands.get(cmdName) || 
                     global.client.commands.get(global.client.aliases.get(cmdName));
@@ -54,12 +57,12 @@ module.exports = async function (event, api) {
             reply("error executing command."); 
         }
     } 
-    else if (body.length > 1) {
+    else {
         const ai = global.client.commands.get("amdus");
         if (ai) {
             try {
                 if (api.sendTypingIndicator) api.sendTypingIndicator(true, id).catch(()=>{});
-                await ai.run({ event, args: body.split(/\s+/), api, reply });
+                await ai.run({ event, args: body ? body.split(/\s+/) : [], api, reply });
             } catch (e) {
                 console.error("AI Fallback Error:", e);
             } finally { 
