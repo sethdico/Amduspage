@@ -1,15 +1,16 @@
-const { askChipp } = require("./ai/handlers");
-const { getSession, saveSession } = require("./ai/session");
-const { parseAI } = require("../utils/helpers");
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
-const { http } = require("../utils/http");
+const { http } = require("../../utils/http");
 const { pipeline } = require('stream');
 const { promisify } = require('util');
 const streamPipeline = promisify(pipeline);
 const axios = require('axios');
 const FormData = require('form-data');
+
+const { askChipp } = require("./handlers");
+const { getSession, saveSession } = require("./session");
+const { parseAI } = require("../../utils/helpers");
 
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const COOLDOWN_MS = 4000;
@@ -38,8 +39,7 @@ async function uploadBase64Attachment({ senderId, data, pageAccessToken, reply }
         knownLength: buffer.length 
     });
 
-    const messageBody = data.messageBody || '';
-    if (messageBody) await reply(messageBody);
+    if (data.messageBody) await reply(data.messageBody);
 
     await axios.post(
         `https://graph.facebook.com/v21.0/me/messages?access_token=${pageAccessToken}`, 
@@ -55,9 +55,9 @@ async function uploadBase64Attachment({ senderId, data, pageAccessToken, reply }
 module.exports.config = {
   name: "amdus",
   author: "sethdico",
-  version: "24.0",
+  version: "25.0",
   category: "AI",
-  description: "real time info, vision for images/videos, image generation, and file output.",
+  description: "real time info, vision, generation, and files.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 0,
@@ -83,22 +83,31 @@ module.exports.run = async function ({ event, args, api, reply }) {
   const whoQueries = new Set(["who are you", "what are you", "who r u", "what r u"]);
   if (whoQueries.has(normalized)) return reply("i am amdusbot by seth asher. type help for commands.");
 
-  const repliedAttachment = event.message?.reply_to?.attachments?.find(a => ["image", "video"].includes(a.type));
-  
-  let url = "";
+  const getMediaUrls = () => {
+      const current = event.message?.attachments || [];
+      const replied = event.message?.reply_to?.attachments || [];
+      return [...current, ...replied]
+          .filter(a => ["image", "video"].includes(a.type))
+          .map(a => a.payload.url);
+  };
 
-  if (repliedAttachment) {
-      if (!prompt) return reply("You MUST reply to the image/video alongside with your instruction.");
-      url = repliedAttachment.payload.url;
-  } else {
-      if (!prompt) return reply("hello, i am amdusbot. how can i help you today?");
-  }
+  const mediaUrls = getMediaUrls();
+
+  if (mediaUrls.length > 0 && !prompt) return reply("You MUST send a query alongside your image/video(s).");
+  if (!prompt && mediaUrls.length === 0) return reply("hello, i am amdusbot. how can i help you today?");
 
   if (api.sendTypingIndicator) api.sendTypingIndicator(true, sender);
 
   try {
     const session = getSession(sender);
-    const res = await askChipp(prompt, url, session);
+    
+    let finalPrompt = prompt;
+    if (mediaUrls.length > 0) {
+        const mediaTags = mediaUrls.map(url => `[image: ${url}]`).join("\n");
+        finalPrompt = `${mediaTags}\n\n${prompt}`;
+    }
+
+    const res = await askChipp(finalPrompt, null, session);
 
     if (!res || res.error) return reply(`⚠️ ${res?.message || "ai request failed"}`);
     
@@ -111,14 +120,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const fileJsonMatch = rawTxt.match(/\{"fileName":".*?","fileBase64":".*?"\}/s);
         if (fileJsonMatch) {
             const fileData = JSON.parse(fileJsonMatch[0]);
-            const msgBody = rawTxt.substring(0, fileJsonMatch.index).trim();
-            fileData.messageBody = msgBody;
+            fileData.messageBody = rawTxt.substring(0, fileJsonMatch.index).trim();
             
             await uploadBase64Attachment({ senderId: sender, data: fileData, pageAccessToken, reply });
             return; 
         }
     } catch (e) {
-        console.error("Base64 processing error:", e.message);
+        console.error("Base64 error:", e.message);
     }
     
     const fileRegex = /(https?:\/\/[^\s)]+\.(?:pdf|docx|xlsx|txt|jpg|jpeg|png|mp4|mp3|zip)(?:\?[^\s)]*)?)/i;
@@ -127,13 +135,10 @@ module.exports.run = async function ({ event, args, api, reply }) {
     if (match) {
       const fileUrl = match[0];
       const msgBody = rawTxt.replace(match[0], "").trim();
-      
       const fileName = path.basename(fileUrl).split("?")[0];
       const filePath = path.join(global.CACHE_PATH, fileName);
 
       try {
-        if (!fs.existsSync(global.CACHE_PATH)) fs.mkdirSync(global.CACHE_PATH);
-
         const head = await http.head(fileUrl);
         const size = head.headers['content-length'];
         
@@ -144,12 +149,11 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
         if (msgBody) await reply(msgBody);
 
-        const attachmentType = fileName.match(/\.(jpg|jpeg|png|gif)$/i) ? "image" : "file";
-        await api.sendAttachment(attachmentType, filePath, sender);
+        const type = fileName.match(/\.(jpg|jpeg|png|gif|mp4)$/i) ? (fileName.endsWith('mp4') ? 'video' : 'image') : 'file';
+        await api.sendAttachment(type, filePath, sender);
 
         await fsPromises.unlink(filePath);
       } catch (err) {
-        console.error("file download error:", err);
         reply(`${msgBody}\n\n[link: ${fileUrl}]`);
       }
     } else {
@@ -157,8 +161,8 @@ module.exports.run = async function ({ event, args, api, reply }) {
     }
 
   } catch (e) {
-    console.error("amdus.run critical error:", e);
-    reply("critical error: " + (e.message || "process failed"));
+    console.error("amdus critical error:", e);
+    reply("critical error: process failed");
   } finally {
     if (api.sendTypingIndicator) api.sendTypingIndicator(false, sender);
   }
