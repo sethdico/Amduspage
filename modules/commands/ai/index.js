@@ -16,22 +16,15 @@ const MAX_FILE_BYTES = 25 * 1024 * 1024;
 const COOLDOWN_MS = 4000;
 const lastRequests = new Map();
 
-async function uploadBase64Attachment({ senderId, data, pageAccessToken, reply }) {
-    const cleanBase64 = data.fileBase64.replace(/^data:.*;base64,/, '').replace(/\s/g, '');
-    const mimeMatch = data.fileBase64.match(/^data:(.*?);base64,/);
-    const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
-    const fileName = data.fileName || 'file.bin';
-    const buffer = Buffer.from(cleanBase64, 'base64');
-    
-    if (buffer.length > MAX_FILE_BYTES) throw new Error("File decoded size is too large.");
+async function sendRawAttachment(senderId, buffer, fileName, mimeType, messageBody, pageAccessToken, reply) {
+    if (buffer.length > MAX_FILE_BYTES) throw new Error("File too large.");
+
+    const type = (mimeType.startsWith('image/') ? 'image' : (mimeType.startsWith('video/') ? 'video' : 'file'));
 
     const form = new FormData();
     form.append('recipient', JSON.stringify({ id: senderId }));
     form.append('message', JSON.stringify({ 
-        attachment: { 
-            type: mimeType.startsWith('image/') ? 'image' : 'file', 
-            payload: {} 
-        } 
+        attachment: { type: type, payload: {} } 
     }));
     form.append('filedata', buffer, { 
         filename: fileName, 
@@ -39,25 +32,21 @@ async function uploadBase64Attachment({ senderId, data, pageAccessToken, reply }
         knownLength: buffer.length 
     });
 
-    if (data.messageBody) await reply(data.messageBody);
+    if (messageBody) await reply(messageBody);
 
     await axios.post(
         `https://graph.facebook.com/v21.0/me/messages?access_token=${pageAccessToken}`, 
         form, 
-        { 
-            headers: form.getHeaders(), 
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity
-        }
+        { headers: form.getHeaders(), maxContentLength: Infinity, maxBodyLength: Infinity }
     );
 }
 
 module.exports.config = {
   name: "amdus",
   author: "sethdico",
-  version: "25.0",
+  version: "30.0",
   category: "AI",
-  description: "real time info, vision, generation, and files.",
+  description: "real time info, multi-image vision, generation, and file output.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 0,
@@ -75,6 +64,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
   const sender = event.sender.id;
   const prompt = args.join(" ").trim();
   const pageAccessToken = global.PAGE_ACCESS_TOKEN;
+  const { CHIPP_API_KEY, CHIPP_MODEL } = process.env;
 
   const remaining = canSendNow(sender);
   if (remaining) return reply(`please wait ${remaining}s before your next request.`);
@@ -93,7 +83,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
   const mediaUrls = getMediaUrls();
 
-  if (mediaUrls.length > 0 && !prompt) return reply("You MUST send a query alongside your image/video(s).");
+  if (mediaUrls.length > 0 && !prompt) return reply("You MUST send a query alongside your image(s).");
   if (!prompt && mediaUrls.length === 0) return reply("hello, i am amdusbot. how can i help you today?");
 
   if (api.sendTypingIndicator) api.sendTypingIndicator(true, sender);
@@ -101,58 +91,96 @@ module.exports.run = async function ({ event, args, api, reply }) {
   try {
     const session = getSession(sender);
     
-    let finalPrompt = prompt;
-    if (mediaUrls.length > 0) {
-        const mediaTags = mediaUrls.map(url => `[image: ${url}]`).join("\n");
-        finalPrompt = `${mediaTags}\n\n${prompt}`;
-    }
+    let contentPayload = [];
+    if (prompt) contentPayload.push({ type: "text", text: prompt });
+    else contentPayload.push({ type: "text", text: "Describe this image." });
 
-    const res = await askChipp(finalPrompt, null, session);
+    mediaUrls.forEach(url => {
+        contentPayload.push({ type: "image_url", image_url: { url: url } });
+    });
 
-    if (!res || res.error) return reply(`⚠️ ${res?.message || "ai request failed"}`);
+    const body = {
+        model: CHIPP_MODEL || "newapplication-10035084",
+        messages: [
+            { role: "system", content: "You are AmdusBot. Helpful, direct, and capable of analyzing images." },
+            { role: "user", content: contentPayload }
+        ],
+        chatSessionId: session?.chatSessionId,
+        stream: false,
+        temperature: 0.5
+    };
+
+    const res = await http.post("https://app.chipp.ai/api/v1/chat/completions", body, {
+      headers: {
+        "Authorization": `Bearer ${CHIPP_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      timeout: 60000
+    });
+
+    if (!res.data || res.data.error) return reply(`⚠️ ${res.data?.error || "ai request failed"}`);
     
     if (res.data?.chatSessionId) saveSession(sender, res.data.chatSessionId);
     
-    const rawTxt = parseAI(res);
+    const rawTxt = parseAI({ data: res.data });
     if (!rawTxt) return reply("received empty response from ai.");
     
     try {
         const fileJsonMatch = rawTxt.match(/\{"fileName":".*?","fileBase64":".*?"\}/s);
         if (fileJsonMatch) {
             const fileData = JSON.parse(fileJsonMatch[0]);
-            fileData.messageBody = rawTxt.substring(0, fileJsonMatch.index).trim();
+            const msgBody = rawTxt.substring(0, fileJsonMatch.index).trim();
             
-            await uploadBase64Attachment({ senderId: sender, data: fileData, pageAccessToken, reply });
+            const cleanBase64 = fileData.fileBase64.replace(/^data:.*;base64,/, '').replace(/\s/g, '');
+            const buffer = Buffer.from(cleanBase64, 'base64');
+            const mimeMatch = fileData.fileBase64.match(/^data:(.*?);base64,/);
+            const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+
+            await sendRawAttachment(sender, buffer, fileData.fileName || 'file.bin', mimeType, msgBody, pageAccessToken, reply);
             return; 
         }
     } catch (e) {
-        console.error("Base64 error:", e.message);
+        console.error("Direct JSON parse error:", e.message);
     }
     
-    const fileRegex = /(https?:\/\/[^\s)]+\.(?:pdf|docx|xlsx|txt|jpg|jpeg|png|mp4|mp3|zip)(?:\?[^\s)]*)?)/i;
-    const match = rawTxt.match(fileRegex);
+    const fileRegex = /(https?:\/\/[^\s)]+\.(?:pdf|docx|xlsx|txt|jpg|jpeg|png|mp4|mp3|zip|bin)(?:\?[^\s)]*)?)/i;
+    const match = rawTxt.match(fileRegex) || (rawTxt.includes("chipp.ai/api/downloads") ? rawTxt.match(/(https?:\/\/[^\s)]+)/) : null);
 
     if (match) {
       const fileUrl = match[0];
       const msgBody = rawTxt.replace(match[0], "").trim();
-      const fileName = path.basename(fileUrl).split("?")[0];
-      const filePath = path.join(global.CACHE_PATH, fileName);
-
+      
       try {
-        const head = await http.head(fileUrl);
-        const size = head.headers['content-length'];
+        const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
+        const buffer = Buffer.from(response.data);
         
-        if (size > MAX_FILE_BYTES) return reply(`${msgBody}\n\n(file too large) [link: ${fileUrl}]`);
+        let fileName = path.basename(fileUrl.split("?")[0]) || "downloaded_file.bin";
+        let mimeType = response.headers['content-type'] || 'application/octet-stream';
 
-        const response = await http.get(fileUrl, { responseType: 'stream' });
-        await streamPipeline(response.data, fs.createWriteStream(filePath));
+        try {
+            const textContent = buffer.toString('utf8');
+            if (textContent.includes('"fileBase64":') && textContent.includes('"fileName":')) {
+                const json = JSON.parse(textContent);
+                const cleanBase64 = json.fileBase64.replace(/^data:.*;base64,/, '').replace(/\s/g, '');
+                
+                const realBuffer = Buffer.from(cleanBase64, 'base64');
+                const realMimeMatch = json.fileBase64.match(/^data:(.*?);base64,/);
+                
+                await sendRawAttachment(
+                    sender, 
+                    realBuffer, 
+                    json.fileName || fileName, 
+                    realMimeMatch ? realMimeMatch[1] : mimeType, 
+                    msgBody, 
+                    pageAccessToken, 
+                    reply
+                );
+                return;
+            }
+        } catch (jsonErr) {}
 
-        if (msgBody) await reply(msgBody);
+        await sendRawAttachment(sender, buffer, fileName, mimeType, msgBody, pageAccessToken, reply);
 
-        const type = fileName.match(/\.(jpg|jpeg|png|gif|mp4)$/i) ? (fileName.endsWith('mp4') ? 'video' : 'image') : 'file';
-        await api.sendAttachment(type, filePath, sender);
-
-        await fsPromises.unlink(filePath);
       } catch (err) {
         reply(`${msgBody}\n\n[link: ${fileUrl}]`);
       }
