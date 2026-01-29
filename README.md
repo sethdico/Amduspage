@@ -12,9 +12,10 @@ simple. fast. secure.
 
 ## structure
 
-- `modules/commands` — bot logic
-- `modules/core` — database & cache managers
-- `page/src` — facebook api wrappers
+- `modules/commands` — bot logic (ai, media, fun, etc)
+- `modules/core` — database, cache & queue managers
+- `modules/middleware` — rate limiting & validation
+- `page/src` — facebook api wrappers (carousel, buttons, etc)
 - `config/` — api endpoints & constants
 - `index.js` — main entry point
 
@@ -35,13 +36,17 @@ set these in your host (Render/Railway/Replit) or `.env` file:
 | `APP_SECRET` | app secret for security |
 | `ADMINS` | your id (separated by comma) |
 | `MONGODB_URI` | mongodb connection string |
-| `DICT_API_KEY` | merriam-webster key |
-| `CHIPP_API_KEY` | ai chat key |
-| `APY_TOKEN` | tempmail api key |
+| `CHIPP_API_KEY` | main ai key (amdus) |
+| `CHIPP_MODEL` | ai model id |
+| `GEMINI_COOKIE` | `__Secure-1PSID` for gemini |
+| `MIMO_STUDIO_COOKIE` | cookie for mimo ai |
+| `OPENROUTER_KEY` | key for molmo vision |
+| `APY_TOKEN` | apyhub key for tempmail |
 | `GOOGLE_API_KEY` | google search api |
 | `GOOGLE_CX` | google search engine id |
 | `NASA_API_KEY` | nasa photos |
 | `WOLFRAM_APP_ID` | wolfram alpha id |
+| `DICT_API_KEY` | merriam-webster key |
 
 ---
 
@@ -59,12 +64,32 @@ node index.js
 
 ---
 
-## admin commands
+## commands
 
+**ai**
+`amdus <query>` — main ai (supports image/files).
+`gemini <query>` — google gemini with vision.
+`mimo <query>` — conversational ai with visual context.
+`molmo <media>` — vision analysis for images/videos.
+`copilot`, `perplexity`, `gpt5`, `blackbox` — other models.
+
+**media**
+`alldl <url>` — universal downloader (fb, tt, yt, etc).
+`pinterest <query>` — search images (carousel).
+`screenshot <url>` — capture website preview.
+`lyrics <song>` — find song lyrics.
+`dalle <prompt>` — generate images.
+
+**utility**
+`tempmail` — generate disposable emails.
+`remind <time> <msg>` — set a reminder (e.g. 10m).
+`translate <lang> <text>` — translate text and audio.
+`dict`, `google`, `wiki`, `wolfram` — information tools.
+
+**admin**
 `stats` — check ram, uptime, and user count.
-`uid` — get your id and db info.
-`ban <id> <reason>` — block a user.
-`unban <id>` — unblock a user.
+`getuser` — view or sync user database.
+`ban`/`unban` — manage user access.
 `broadcast <msg>` — send announcement to all users.
 `maintenance on/off` — toggle bot availability.
 `clean` — purge old cache files.
