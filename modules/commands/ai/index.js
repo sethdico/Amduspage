@@ -1,180 +1,184 @@
 const fs = require("fs");
 const path = require("path");
-const { http } = require("../../utils/http");
-const { pipeline } = require('stream');
-const { promisify } = require('util');
-const streamPipeline = promisify(pipeline);
 const axios = require('axios');
 const FormData = require('form-data');
-
+const db = require("../../core/database");
 const { askChipp } = require("./handlers");
 const { getSession, saveSession } = require("./session");
 const { parseAI } = require("../../utils/helpers");
 
-const MAX_FILE_BYTES = 25 * 1024 * 1024;
-const COOLDOWN_MS = 4000;
+const MAX_SIZE = 25 * 1024 * 1024;
+const COOLDOWN = 4000;
 const lastRequests = new Map();
+const warnings = new Map();
 
-async function uploadBase64Attachment({ senderId, data, pageAccessToken, reply }) {
-    const cleanBase64 = data.fileBase64.replace(/^data:.*;base64,/, '').replace(/\s/g, '');
-    const mimeMatch = data.fileBase64.match(/^data:(.*?);base64,/);
-    const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
-    const fileName = data.fileName || 'file.bin';
-    const buffer = Buffer.from(cleanBase64, 'base64');
+const LIMITS = { IMG: 3, VID: 1, TXT: 50000 };
+
+async function uploadFile({ senderId, data, token, reply }) {
+    const clean64 = data.fileBase64.replace(/^data:.*;base64,/, '').replace(/\s/g, '');
+    const mime = (data.fileBase64.match(/^data:(.*?);base64,/) || [])[1] || 'application/octet-stream';
+    const buffer = Buffer.from(clean64, 'base64');
     
-    if (buffer.length > MAX_FILE_BYTES) throw new Error("File too large.");
+    if (buffer.length > MAX_SIZE) throw new Error("file too big.");
 
     const form = new FormData();
     form.append('recipient', JSON.stringify({ id: senderId }));
-    form.append('message', JSON.stringify({ 
-        attachment: { type: mimeType.startsWith('image/') ? 'image' : 'file', payload: {} } 
-    }));
-    form.append('filedata', buffer, { 
-        filename: fileName, 
-        contentType: mimeType, 
-        knownLength: buffer.length 
-    });
+    form.append('message', JSON.stringify({ attachment: { type: mime.startsWith('image/') ? 'image' : 'file', payload: {} } }));
+    form.append('filedata', buffer, { filename: data.fileName || 'file.bin', contentType: mime, knownLength: buffer.length });
 
     if (data.messageBody) await reply(data.messageBody);
 
-    await axios.post(
-        `https://graph.facebook.com/v21.0/me/messages?access_token=${pageAccessToken}`, 
-        form, 
-        { headers: form.getHeaders(), maxContentLength: Infinity, maxBodyLength: Infinity }
-    );
+    await axios.post(`https://graph.facebook.com/v21.0/me/messages?access_token=${token}`, form, {
+        headers: form.getHeaders(), maxContentLength: Infinity, maxBodyLength: Infinity
+    });
+}
+
+async function enforceSafety(userId, reply) {
+    const count = (warnings.get(userId) || 0) + 1;
+    warnings.set(userId, count);
+
+    if (count === 1) return reply("warning 1 of 2. stop.");
+    if (count === 2) return reply("warning 2 of 2. last warning.");
+    
+    try {
+        await db.addBan(userId, "unethical behavior");
+        global.BANNED_USERS.add(userId);
+        return reply("banned.");
+    } catch (e) {
+        return reply("error.");
+    }
 }
 
 module.exports.config = {
   name: "amdus",
   author: "sethdico",
-  version: "36.0",
+  version: "68.0",
   category: "AI",
-  description: "real time info, multi-image vision, generation, and file output.",
+  description: "real time info, vision for images/videos/file and generation, and safety enforcement.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 0,
 };
 
-function canSendNow(userId) {
+module.exports.run = async function ({ event, args, api, reply }) {
+  const userId = event.sender.id;
+  const query = args.join(" ").trim();
+  const token = global.PAGE_ACCESS_TOKEN;
+
   const now = Date.now();
   const last = lastRequests.get(userId) || 0;
-  if (now - last < COOLDOWN_MS) return Math.ceil((COOLDOWN_MS - (now - last)) / 1000);
+  if (now - last < COOLDOWN) return reply(`wait ${Math.ceil((COOLDOWN - (now - last)) / 1000)}s.`);
   lastRequests.set(userId, now);
-  return 0;
-}
 
-module.exports.run = async function ({ event, args, api, reply }) {
-  const sender = event.sender.id;
-  const prompt = args.join(" ").trim();
-  const pageAccessToken = global.PAGE_ACCESS_TOKEN;
+  const norm = (query || "").toLowerCase().replace(/[^\w\s]/g, '').trim();
+  if (["who are you", "what are you"].includes(norm)) return reply("i am amdusbot. ask me anything.");
 
-  const remaining = canSendNow(sender);
-  if (remaining) return reply(`please wait ${remaining}s before your next request.`);
-
-  const normalized = (prompt || "").toLowerCase().replace(/[^\w\s]/g, '').trim();
-  const whoQueries = new Set(["who are you", "what are you", "who r u", "what r u"]);
-  if (whoQueries.has(normalized)) return reply("i am amdusbot by seth asher. type help for commands.");
-
-  const attachments = [
-      ...(event.message?.attachments || []),
-      ...(event.message?.reply_to?.attachments || [])
-  ];
-  
-  const imageUrls = attachments
-      .filter(a => a.type === "image")
-      .map(a => a.payload.url);
-
-  if (imageUrls.length > 0 && !prompt) return reply("Reply to the image and sent your query.");
-  if (!prompt && imageUrls.length === 0) return reply("hello, i am amdusbot. how can i help you today?");
-
-  if (api.sendTypingIndicator) api.sendTypingIndicator(true, sender);
+  if (api.sendTypingIndicator) api.sendTypingIndicator(true, userId);
 
   try {
-    const session = getSession(sender);
-    
-    let finalPrompt = prompt;
-    if (imageUrls.length > 0) {
-        const imageBlock = imageUrls.map(url => `[image: ${url}]`).join("\n");
-        finalPrompt = `${imageBlock}\n\n${prompt}`;
+    const attachments = [...(event.message?.attachments || []), ...(event.message?.reply_to?.attachments || [])];
+    let context = [];
+    let counts = { img: 0, vid: 0 };
+
+    for (const file of attachments) {
+        if (file.type === "image" && counts.img < LIMITS.IMG) {
+            context.push(`[image: ${file.payload.url}]`);
+            counts.img++;
+        } 
+        else if (file.type === "video" && counts.vid < LIMITS.VID) {
+            context.push(`\nanalyze video: ${file.payload.url}`);
+            counts.vid++;
+        }
+        else if (file.type === "file") {
+            const url = file.payload.url;
+            const ext = path.extname(url.split('?')[0]).toLowerCase();
+            
+            if (['.txt', '.js', '.json', '.md', '.py', '.c', '.cpp'].includes(ext)) {
+                try {
+                    const res = await axios.get(url, { responseType: 'text', timeout: 5000 });
+                    let txt = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+                    if (txt.length > LIMITS.TXT) txt = txt.substring(0, LIMITS.TXT) + "\n...[cut]";
+                    context.push(`\n[content: ${file.title}]\n${txt}\n[end]`);
+                } catch (e) {
+                    context.push(`\nanalyze doc link: ${url}`);
+                }
+            } else {
+                context.push(`\nread doc: ${url}`);
+            }
+        }
     }
 
+    let finalPrompt = context.length ? `${context.join("\n")}\n\nquery: ${query || "analyze."}` : query;
+    if (!finalPrompt) return reply("i am amdusbot.");
+
+    const session = getSession(userId);
     const res = await askChipp(finalPrompt, null, session);
 
-    if (!res || res.error) return reply(`⚠️ ${res?.message || "ai request failed"}`);
+    if (!res || res.error) return reply("api error.");
+    if (res.data?.chatSessionId) saveSession(userId, res.data.chatSessionId);
     
-    if (res.data?.chatSessionId) saveSession(sender, res.data.chatSessionId);
-    
-    const rawTxt = parseAI(res);
-    if (!rawTxt) return reply("received empty response from ai.");
-    
+    const text = parseAI(res);
+    if (!text) return reply("no response.");
+
+    if (text.includes('"action": "ban"') || text.includes('"action":"ban"')) {
+        return enforceSafety(userId, reply);
+    }
+
     try {
-        const fileJsonMatch = rawTxt.match(/\{"fileName":".*?","fileBase64":".*?"\}/s);
-        if (fileJsonMatch) {
-            const fileData = JSON.parse(fileJsonMatch[0]);
-            fileData.messageBody = rawTxt.substring(0, fileJsonMatch.index).trim();
-            
-            await uploadBase64Attachment({ senderId: sender, data: fileData, pageAccessToken, reply });
+        const jsonMatch = text.match(/\{"fileName":".*?","fileBase64":".*?"\}/s);
+        if (jsonMatch) {
+            const fileData = JSON.parse(jsonMatch[0]);
+            fileData.messageBody = text.substring(0, jsonMatch.index).trim();
+            await uploadFile({ senderId: userId, data: fileData, token, reply });
             return; 
         }
     } catch (e) {}
     
-    const fileRegex = /(https?:\/\/[^\s)]+\.(?:pdf|docx|xlsx|txt|jpg|jpeg|png|mp4|mp3|zip|bin)(?:\?[^\s)]*)?)/i;
-    const match = rawTxt.match(fileRegex) || (rawTxt.includes("chipp.ai/api/downloads") ? rawTxt.match(/(https?:\/\/[^\s)]+)/) : null);
+    const linkMatch = text.match(/(https?:\/\/[^\s)]+\.(?:pdf|docx|xlsx|txt|jpg|png|mp4|zip)(?:\?[^\s)]*)?)/i) 
+                   || (text.includes("chipp.ai/api/downloads") ? text.match(/(https?:\/\/[^\s)]+)/) : null);
 
-    if (match) {
-      const fileUrl = match[0];
-      const msgBody = rawTxt.replace(match[0], "").trim();
-      
-      try {
-        const response = await axios.get(fileUrl, { responseType: 'arraybuffer' });
-        const buffer = Buffer.from(response.data);
+    if (linkMatch) {
+        const url = linkMatch[0];
+        const msg = text.replace(url, "").trim();
         
-        let fileName = path.basename(fileUrl.split("?")[0]) || "downloaded_file.bin";
-        let mimeType = response.headers['content-type'] || 'application/octet-stream';
-
         try {
-            const textContent = buffer.toString('utf8');
-            if (textContent.includes('"fileBase64":') && textContent.includes('"fileName":')) {
-                const json = JSON.parse(textContent);
-                const cleanBase64 = json.fileBase64.replace(/^data:.*;base64,/, '').replace(/\s/g, '');
-                
-                await uploadBase64Attachment({ 
-                    senderId: sender, 
-                    data: { 
-                        fileName: json.fileName || fileName, 
-                        fileBase64: json.fileBase64,
-                        messageBody: msgBody 
-                    }, 
-                    pageAccessToken, 
-                    reply 
-                });
-                return;
-            }
-        } catch (jsonErr) {}
+            const fileRes = await axios.get(url, { responseType: 'arraybuffer' });
+            const buffer = Buffer.from(fileRes.data);
+            const fileName = path.basename(url.split("?")[0]) || "file.bin";
+            const mime = fileRes.headers['content-type'] || 'application/octet-stream';
 
-        const type = mimeType.startsWith('image/') ? 'image' : (mimeType.startsWith('video/') ? 'video' : 'file');
-        const form = new FormData();
-        form.append('recipient', JSON.stringify({ id: sender }));
-        form.append('message', JSON.stringify({ attachment: { type, payload: {} } }));
-        form.append('filedata', buffer, { filename: fileName, contentType: mimeType, knownLength: buffer.length });
+            try {
+                const asText = buffer.toString('utf8');
+                if (asText.includes('"fileBase64":')) {
+                    const json = JSON.parse(asText);
+                    await uploadFile({ senderId: userId, data: { fileName: json.fileName, fileBase64: json.fileBase64, messageBody: msg }, token, reply });
+                    return;
+                }
+            } catch (ignore) {}
 
-        if (msgBody) await reply(msgBody);
+            const type = mime.startsWith('image/') ? 'image' : (mime.startsWith('video/') ? 'video' : 'file');
+            const form = new FormData();
+            form.append('recipient', JSON.stringify({ id: userId }));
+            form.append('message', JSON.stringify({ attachment: { type, payload: {} } }));
+            form.append('filedata', buffer, { filename: fileName, contentType: mime, knownLength: buffer.length });
 
-        await axios.post(`https://graph.facebook.com/v21.0/me/messages?access_token=${pageAccessToken}`, form, {
-            headers: form.getHeaders(), maxContentLength: Infinity, maxBodyLength: Infinity
-        });
+            if (msg) await reply(msg);
+            
+            await axios.post(`https://graph.facebook.com/v21.0/me/messages?access_token=${token}`, form, {
+                headers: form.getHeaders(), maxContentLength: Infinity, maxBodyLength: Infinity
+            });
 
-      } catch (err) {
-        reply(`${msgBody}\n\n[link: ${fileUrl}]`);
-      }
+        } catch (err) {
+            reply(`${msg}\n\n[link: ${url}]`);
+        }
     } else {
-      reply(rawTxt);
+        reply(text);
     }
 
-  } catch (e) {
-    console.error("amdus critical error:", e);
-    reply("critical error: process failed");
+  } catch (err) {
+    console.error("error:", err.message);
+    reply("system error.");
   } finally {
-    if (api.sendTypingIndicator) api.sendTypingIndicator(false, sender);
+    if (api.sendTypingIndicator) api.sendTypingIndicator(false, userId);
   }
 };
