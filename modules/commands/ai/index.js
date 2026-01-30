@@ -12,6 +12,10 @@ const COOLDOWN = 4000;
 const lastRequests = new Map();
 const warnings = new Map();
 
+// anti-double-reply cache
+const processedMids = new Set();
+setInterval(() => processedMids.clear(), 30000); 
+
 const LIMITS = { IMG: 3, VID: 1, TXT: 50000 };
 
 async function uploadFile({ senderId, data, token, reply }) {
@@ -52,9 +56,9 @@ async function enforceSafety(userId, reply) {
 module.exports.config = {
   name: "amdus",
   author: "sethdico",
-  version: "68.0",
+  version: "72.0",
   category: "AI",
-  description: "real time info, vision for images/videos/file and generation, and safety enforcement.",
+  description: "core ai system with anti-double-reply.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 0,
@@ -62,9 +66,18 @@ module.exports.config = {
 
 module.exports.run = async function ({ event, args, api, reply }) {
   const userId = event.sender.id;
+  const mid = event.message?.mid;
+
+  // prevent double processing
+  if (mid) {
+    if (processedMids.has(mid)) return;
+    processedMids.add(mid);
+  }
+
   const query = args.join(" ").trim();
   const token = global.PAGE_ACCESS_TOKEN;
 
+  // cooldown check
   const now = Date.now();
   const last = lastRequests.get(userId) || 0;
   if (now - last < COOLDOWN) return reply(`wait ${Math.ceil((COOLDOWN - (now - last)) / 1000)}s.`);
@@ -120,10 +133,12 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const text = parseAI(res);
     if (!text) return reply("no response.");
 
+    // check 1: safety
     if (text.includes('"action": "ban"') || text.includes('"action":"ban"')) {
         return enforceSafety(userId, reply);
     }
 
+    // check 2: generated file (base64)
     try {
         const jsonMatch = text.match(/\{"fileName":".*?","fileBase64":".*?"\}/s);
         if (jsonMatch) {
@@ -134,12 +149,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
         }
     } catch (e) {}
     
+    // check 3: generated links
     const linkMatch = text.match(/(https?:\/\/[^\s)]+\.(?:pdf|docx|xlsx|txt|jpg|png|mp4|zip)(?:\?[^\s)]*)?)/i) 
                    || (text.includes("chipp.ai/api/downloads") ? text.match(/(https?:\/\/[^\s)]+)/) : null);
 
     if (linkMatch) {
         const url = linkMatch[0];
-        const msg = text.replace(url, "").trim();
+        const msgBody = text.replace(url, "").trim();
         
         try {
             const fileRes = await axios.get(url, { responseType: 'arraybuffer' });
@@ -151,7 +167,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 const asText = buffer.toString('utf8');
                 if (asText.includes('"fileBase64":')) {
                     const json = JSON.parse(asText);
-                    await uploadFile({ senderId: userId, data: { fileName: json.fileName, fileBase64: json.fileBase64, messageBody: msg }, token, reply });
+                    await uploadFile({ senderId: userId, data: { fileName: json.fileName, fileBase64: json.fileBase64, messageBody: msgBody }, token, reply });
                     return;
                 }
             } catch (ignore) {}
@@ -162,14 +178,14 @@ module.exports.run = async function ({ event, args, api, reply }) {
             form.append('message', JSON.stringify({ attachment: { type, payload: {} } }));
             form.append('filedata', buffer, { filename: fileName, contentType: mime, knownLength: buffer.length });
 
-            if (msg) await reply(msg);
+            if (msgBody) await reply(msgBody);
             
             await axios.post(`https://graph.facebook.com/v21.0/me/messages?access_token=${token}`, form, {
                 headers: form.getHeaders(), maxContentLength: Infinity, maxBodyLength: Infinity
             });
 
         } catch (err) {
-            reply(`${msg}\n\n[link: ${url}]`);
+            reply(`${msgBody}\n\n[link: ${url}]`);
         }
     } else {
         reply(text);
