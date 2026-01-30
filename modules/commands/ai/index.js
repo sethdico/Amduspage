@@ -55,7 +55,7 @@ async function enforceSafety(userId, reply) {
 module.exports.config = {
   name: "amdus",
   author: "sethdico",
-  version: "100.0",
+  version: "105.0",
   category: "AI",
   description: "real time info, image, video and document recognition, plus file and image generation.",
   adminOnly: false,
@@ -98,23 +98,30 @@ module.exports.run = async function ({ event, args, api, reply }) {
         seen.add(url);
 
         if (file.type === "image" && counts.img < LIMITS.IMG) {
-            context.push(`[instruction: analyzeimage] please use your tool to analyze this image url: ${url}`);
+            context.push(`[Reference Image URL]: ${url}`);
             counts.img++;
         } 
         else if (file.type === "video" && counts.vid < LIMITS.VID) {
-            context.push(`[instruction: analyzevideo] please use your tool to analyze this video url: ${url}`);
+            context.push(`[Reference Video URL]: ${url}`);
             counts.vid++;
         }
         else if (file.type === "file") {
             const ext = path.extname(url.split('?')[0]).toLowerCase();
             const allowed = ['.txt', '.js', '.json', '.md', '.py', '.docx', '.doc', '.pdf'];
             if (allowed.includes(ext)) {
-                context.push(`[instruction: processfile/retrieveurl] please use your tools to read the content of this document url: ${url}`);
+                context.push(`[Reference Document URL]: ${url}`);
             }
         }
     }
 
-    let finalPrompt = context.length ? `${context.join("\n")}\n\nuser query: ${query || "summarize and analyze the provided media."}` : query;
+    let finalPrompt = "";
+    
+    if (context.length > 0) {
+        finalPrompt = `Here is media/content provided by the user for context:\n${context.join("\n")}\n\nUSER REQUEST: ${query || "Describe this content detailedly."}\n\nNote: If the user asks a question, answer it based on the media above. If no question is asked, describe the media.`;
+    } else {
+        finalPrompt = query;
+    }
+
     if (!finalPrompt) {
         userLock.delete(userId);
         return reply("i am amdusbot. ask me anything.");
