@@ -1,4 +1,3 @@
-const fs = require("fs");
 const path = require("path");
 const axios = require('axios');
 const FormData = require('form-data');
@@ -56,7 +55,7 @@ async function enforceSafety(userId, reply) {
 module.exports.config = {
   name: "amdus",
   author: "sethdico",
-  version: "90.0",
+  version: "100.0",
   category: "AI",
   description: "real time info, image, video and document recognition, plus file and image generation.",
   adminOnly: false,
@@ -72,8 +71,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
   if (userLock.has(userId)) return; 
   
   const now = Date.now();
-  const last = lastRequests.get(userId) || 0;
-  if (now - last < COOLDOWN_MS && !global.ADMINS.has(userId)) return;
+  if (now - (lastRequests.get(userId) || 0) < COOLDOWN_MS && !global.ADMINS.has(userId)) return;
 
   if (mid) processedMids.add(mid);
   lastRequests.set(userId, now);
@@ -92,29 +90,31 @@ module.exports.run = async function ({ event, args, api, reply }) {
     
     let context = [];
     let counts = { img: 0, vid: 0 };
-    const seenUrls = new Set();
+    const seen = new Set();
 
     for (const file of attachments) {
         const url = file.payload.url;
-        if (seenUrls.has(url)) continue;
-        seenUrls.add(url);
+        if (seen.has(url)) continue;
+        seen.add(url);
 
         if (file.type === "image" && counts.img < LIMITS.IMG) {
-            context.push(`[image: ${url}]`);
+            context.push(`[instruction: analyzeimage] please use your tool to analyze this image url: ${url}`);
             counts.img++;
         } 
         else if (file.type === "video" && counts.vid < LIMITS.VID) {
-            context.push(`[analyze_video: ${url}]`);
+            context.push(`[instruction: analyzevideo] please use your tool to analyze this video url: ${url}`);
             counts.vid++;
         }
         else if (file.type === "file") {
             const ext = path.extname(url.split('?')[0]).toLowerCase();
             const allowed = ['.txt', '.js', '.json', '.md', '.py', '.docx', '.doc', '.pdf'];
-            if (allowed.includes(ext)) context.push(`[read_document: ${url}]`);
+            if (allowed.includes(ext)) {
+                context.push(`[instruction: processfile/retrieveurl] please use your tools to read the content of this document url: ${url}`);
+            }
         }
     }
 
-    let finalPrompt = context.length ? `${context.join("\n")}\n\nquery: ${query || "analyze."}` : query;
+    let finalPrompt = context.length ? `${context.join("\n")}\n\nuser query: ${query || "summarize and analyze the provided media."}` : query;
     if (!finalPrompt) {
         userLock.delete(userId);
         return reply("i am amdusbot. ask me anything.");
@@ -135,7 +135,8 @@ module.exports.run = async function ({ event, args, api, reply }) {
         return reply("no response.");
     }
 
-    if (text.includes('"action": "ban"') || text.includes('"action":"ban"')) {
+    const isBanAction = /^\{[\s\S]*?"action"[\s\S]*?:[\s\S]*?"ban"[\s\S]*?\}$/.test(text.trim());
+    if (isBanAction) {
         userLock.delete(userId);
         return enforceSafety(userId, reply);
     }
