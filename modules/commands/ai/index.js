@@ -10,13 +10,11 @@ const { parseAI } = require("../../utils/helpers");
 const MAX_SIZE = 25 * 1024 * 1024;
 const COOLDOWN = 4000;
 const lastRequests = new Map();
-const warnings = new Map();
-
-// anti-double-reply cache
 const processedMids = new Set();
+
 setInterval(() => processedMids.clear(), 30000); 
 
-const LIMITS = { IMG: 3, VID: 1, TXT: 50000 };
+const LIMITS = { IMG: 5, VID: 1, TXT: 50000 };
 
 async function uploadFile({ senderId, data, token, reply }) {
     const clean64 = data.fileBase64.replace(/^data:.*;base64,/, '').replace(/\s/g, '');
@@ -37,28 +35,12 @@ async function uploadFile({ senderId, data, token, reply }) {
     });
 }
 
-async function enforceSafety(userId, reply) {
-    const count = (warnings.get(userId) || 0) + 1;
-    warnings.set(userId, count);
-
-    if (count === 1) return reply("warning 1 of 2. stop.");
-    if (count === 2) return reply("warning 2 of 2. last warning.");
-    
-    try {
-        await db.addBan(userId, "unethical behavior");
-        global.BANNED_USERS.add(userId);
-        return reply("banned.");
-    } catch (e) {
-        return reply("error.");
-    }
-}
-
 module.exports.config = {
   name: "amdus",
   author: "sethdico",
-  version: "72.0",
+  version: "75.0",
   category: "AI",
-  description: "core ai system with anti-double-reply.",
+  description: "Advanced AI with real-time info, file/image generation, and media recognition. Analyzes images and docs directly; videos require a reply for processing.",
   adminOnly: false,
   usePrefix: false,
   cooldown: 0,
@@ -68,7 +50,6 @@ module.exports.run = async function ({ event, args, api, reply }) {
   const userId = event.sender.id;
   const mid = event.message?.mid;
 
-  // prevent double processing
   if (mid) {
     if (processedMids.has(mid)) return;
     processedMids.add(mid);
@@ -77,68 +58,71 @@ module.exports.run = async function ({ event, args, api, reply }) {
   const query = args.join(" ").trim();
   const token = global.PAGE_ACCESS_TOKEN;
 
-  // cooldown check
   const now = Date.now();
   const last = lastRequests.get(userId) || 0;
-  if (now - last < COOLDOWN) return reply(`wait ${Math.ceil((COOLDOWN - (now - last)) / 1000)}s.`);
+  if (now - last < COOLDOWN && !global.ADMINS.has(userId)) return reply(`wait ${Math.ceil((COOLDOWN - (now - last)) / 1000)}s.`);
   lastRequests.set(userId, now);
-
-  const norm = (query || "").toLowerCase().replace(/[^\w\s]/g, '').trim();
-  if (["who are you", "what are you"].includes(norm)) return reply("i am amdusbot. ask me anything.");
 
   if (api.sendTypingIndicator) api.sendTypingIndicator(true, userId);
 
   try {
-    const attachments = [...(event.message?.attachments || []), ...(event.message?.reply_to?.attachments || [])];
+    const currentAttachments = event.message?.attachments || [];
+    const repliedAttachments = event.message?.reply_to?.attachments || [];
+    
     let context = [];
     let counts = { img: 0, vid: 0 };
+    const seenUrls = new Set();
 
-    for (const file of attachments) {
+    for (const file of repliedAttachments) {
+        const url = file.payload.url;
+        if (seenUrls.has(url)) continue;
+        seenUrls.add(url);
+
         if (file.type === "image" && counts.img < LIMITS.IMG) {
-            context.push(`[image: ${file.payload.url}]`);
+            context.push(`[replied_image: ${url}]`);
             counts.img++;
         } 
         else if (file.type === "video" && counts.vid < LIMITS.VID) {
-            context.push(`\nanalyze video: ${file.payload.url}`);
+            context.push(`[analyze_replied_video: ${url}]`);
             counts.vid++;
         }
         else if (file.type === "file") {
-            const url = file.payload.url;
             const ext = path.extname(url.split('?')[0]).toLowerCase();
-            
-            if (['.txt', '.js', '.json', '.md', '.py', '.c', '.cpp'].includes(ext)) {
-                try {
-                    const res = await axios.get(url, { responseType: 'text', timeout: 5000 });
-                    let txt = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
-                    if (txt.length > LIMITS.TXT) txt = txt.substring(0, LIMITS.TXT) + "\n...[cut]";
-                    context.push(`\n[content: ${file.title}]\n${txt}\n[end]`);
-                } catch (e) {
-                    context.push(`\nanalyze doc link: ${url}`);
-                }
-            } else {
-                context.push(`\nread doc: ${url}`);
+            if (['.txt', '.js', '.json', '.md', '.py', '.docx', '.doc', '.pdf'].includes(ext)) {
+                context.push(`[read_replied_doc: ${url}]`);
             }
         }
     }
 
-    let finalPrompt = context.length ? `${context.join("\n")}\n\nquery: ${query || "analyze."}` : query;
-    if (!finalPrompt) return reply("i am amdusbot.");
+    for (const file of currentAttachments) {
+        const url = file.payload.url;
+        if (seenUrls.has(url)) continue; 
+        seenUrls.add(url);
+
+        if (file.type === "image" && counts.img < LIMITS.IMG) {
+            context.push(`[image: ${url}]`);
+            counts.img++;
+        } 
+        else if (file.type === "file") {
+            const ext = path.extname(url.split('?')[0]).toLowerCase();
+            if (['.txt', '.js', '.json', '.md', '.py', '.docx', '.doc', '.pdf'].includes(ext)) {
+                context.push(`[document: ${url}]`);
+            }
+        }
+    }
+
+    let finalPrompt = context.length ? `${context.join("\n")}\n\nUser Query: ${query || "Analyze the provided context."}` : query;
+    if (!finalPrompt) return reply("I am Amdusbot. Ask me anything, send an image, or reply to a video.");
 
     const session = getSession(userId);
     const res = await askChipp(finalPrompt, null, session);
 
-    if (!res || res.error) return reply("api error.");
+    if (!res || res.error) return reply("AI search/recognition service is currently offline.");
     if (res.data?.chatSessionId) saveSession(userId, res.data.chatSessionId);
     
     const text = parseAI(res);
-    if (!text) return reply("no response.");
+    if (!text) return reply("No response generated.");
 
-    // check 1: safety
-    if (text.includes('"action": "ban"') || text.includes('"action":"ban"')) {
-        return enforceSafety(userId, reply);
-    }
-
-    // check 2: generated file (base64)
     try {
         const jsonMatch = text.match(/\{"fileName":".*?","fileBase64":".*?"\}/s);
         if (jsonMatch) {
@@ -149,9 +133,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         }
     } catch (e) {}
     
-    // check 3: generated links
-    const linkMatch = text.match(/(https?:\/\/[^\s)]+\.(?:pdf|docx|xlsx|txt|jpg|png|mp4|zip)(?:\?[^\s)]*)?)/i) 
-                   || (text.includes("chipp.ai/api/downloads") ? text.match(/(https?:\/\/[^\s)]+)/) : null);
+    const linkMatch = text.match(/(https?:\/\/[^\s)]+\.(?:pdf|docx|doc|xlsx|txt|jpg|png|mp4|zip)(?:\?[^\s)]*)?)/i);
 
     if (linkMatch) {
         const url = linkMatch[0];
@@ -162,15 +144,6 @@ module.exports.run = async function ({ event, args, api, reply }) {
             const buffer = Buffer.from(fileRes.data);
             const fileName = path.basename(url.split("?")[0]) || "file.bin";
             const mime = fileRes.headers['content-type'] || 'application/octet-stream';
-
-            try {
-                const asText = buffer.toString('utf8');
-                if (asText.includes('"fileBase64":')) {
-                    const json = JSON.parse(asText);
-                    await uploadFile({ senderId: userId, data: { fileName: json.fileName, fileBase64: json.fileBase64, messageBody: msgBody }, token, reply });
-                    return;
-                }
-            } catch (ignore) {}
 
             const type = mime.startsWith('image/') ? 'image' : (mime.startsWith('video/') ? 'video' : 'file');
             const form = new FormData();
@@ -183,17 +156,16 @@ module.exports.run = async function ({ event, args, api, reply }) {
             await axios.post(`https://graph.facebook.com/v21.0/me/messages?access_token=${token}`, form, {
                 headers: form.getHeaders(), maxContentLength: Infinity, maxBodyLength: Infinity
             });
-
         } catch (err) {
-            reply(`${msgBody}\n\n[link: ${url}]`);
+            reply(`${msgBody}\n\n[Link: ${url}]`);
         }
     } else {
         reply(text);
     }
 
   } catch (err) {
-    console.error("error:", err.message);
-    reply("system error.");
+    console.error("Core AI Error:", err.message);
+    reply("The system encountered an error processing your media or query.");
   } finally {
     if (api.sendTypingIndicator) api.sendTypingIndicator(false, userId);
   }
