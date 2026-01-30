@@ -68,30 +68,47 @@ node index.js
 
 **ai**
 `amdus <query>` — main ai (supports image/files).
+
 `gemini <query>` — google gemini with vision.
+
 `mimo <query>` — conversational ai with visual context.
+
 `molmo <media>` — vision analysis for images/videos.
-`copilot`, `perplexity`, `gpt5`, `blackbox` — other models.
+
+`copilot`, `perplexity`, `gpt5` — other models.
 
 **media**
 `alldl <url>` — universal downloader (fb, tt, yt, etc).
+
 `pinterest <query>` — search images (carousel).
+
 `screenshot <url>` — capture website preview.
+
 `lyrics <song>` — find song lyrics.
+
 `dalle <prompt>` — generate images.
+
 
 **utility**
 `tempmail` — generate disposable emails.
+
 `remind <time> <msg>` — set a reminder (e.g. 10m).
+
 `translate <lang> <text>` — translate text and audio.
+
 `dict`, `google`, `wiki`, `wolfram` — information tools.
 
 **admin**
 `stats` — check ram, uptime, and user count.
+
 `getuser` — view or sync user database.
+
 `ban`/`unban` — manage user access.
+
 `broadcast <msg>` — send announcement to all users.
+
 `maintenance on/off` — toggle bot availability.
+
 `clean` — purge old cache files.
 
 ---
