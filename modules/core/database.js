@@ -36,7 +36,7 @@ setInterval(async () => {
 }, 30000);
 
 module.exports = {
-    addBan: (id, reason) => global.ADMINS.has(id) ? Promise.resolve() : Ban.create({ userId: id, reason }),
+    addBan: (id, reason) => global.ADMINS.has(String(id)) ? Promise.resolve() : Ban.create({ userId: id, reason }),
     removeBan: (id) => Ban.deleteOne({ userId: id }),
     loadBansIntoMemory: async (cb) => {
         try { const rows = await Ban.find({}); cb(new Set(rows.map(r => r.userId))); } 
@@ -49,7 +49,7 @@ module.exports = {
         buffer.set(userId, current);
     },
     getRole: async (userId) => {
-        if (global.ADMINS.has(userId)) return "admin";
+        if (global.ADMINS.has(String(userId))) return "admin";
         const user = await UserStat.findOne({ userId });
         return user?.role || "user";
     },
