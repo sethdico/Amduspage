@@ -7,21 +7,26 @@ module.exports = async function (event, api) {
     
     const id = event.sender.id;
     const reply = (msg) => api.sendMessage(msg, id);
-    const isAdmin = global.ADMINS.has(id);
+    
+    const userRole = await db.getRole(id);
+    const isAdmin = userRole === "admin";
+    const isMod = userRole === "moderator" || isAdmin;
 
     try {
         const userInfo = await api.getUserInfo(id);
-        db.syncUser(id, userInfo || { name: "Messenger User" });
+        db.syncUser(id, userInfo);
     } catch (e) {
         db.syncUser(id);
     }
 
-    if (global.MAINTENANCE_MODE && !isAdmin) {
-        return reply(`The bot is currently under maintenance. Reason: ${global.MAINTENANCE_REASON || "Updates"}`);
+    if (global.MONITOR_MODE && !isAdmin) {
+        for (const adminId of global.ADMINS) {
+            api.sendMessage(`[MONITOR] ${id}: ${event.message?.text || "Media"}`, adminId);
+        }
     }
 
-    if (event.postback?.payload === "GET_STARTED_PAYLOAD") {
-        return reply(`Hello! I am ${global.BOT_NAME}. How can I help you today?`);
+    if (global.MAINTENANCE_MODE && !isAdmin) {
+        return reply(`Bot is under maintenance.`);
     }
 
     if (event.message?.is_echo) return;
@@ -37,12 +42,17 @@ module.exports = async function (event, api) {
 
     if (command) {
         if (command.config.adminOnly && !isAdmin) return;
-        
+        if (command.config.modOnly && !isMod) return;
+
+        if (global.disabledCommands?.has(command.config.name) && !isAdmin) {
+            return reply("This command is temporarily disabled.");
+        }
+
         if (command.config.cooldown && !isAdmin) {
             const key = `${id}-${command.config.name}`;
             const lastUsed = cooldowns.get(key) || 0;
             const timeLeft = (lastUsed + (command.config.cooldown * 1000)) - Date.now();
-            if (timeLeft > 0) return reply(`Please wait ${Math.ceil(timeLeft / 1000)}s.`);
+            if (timeLeft > 0) return reply(`Cooldown: ${Math.ceil(timeLeft / 1000)}s`);
             cooldowns.set(key, Date.now());
         }
 
@@ -51,7 +61,7 @@ module.exports = async function (event, api) {
             await command.run({ event, args, api, reply });
             return;
         } catch (e) { 
-            return reply("An error occurred while running the command."); 
+            return reply("Command execution error."); 
         }
     } 
 
