@@ -13,15 +13,10 @@ const UserStatsSchema = new mongoose.Schema({
     lastActive: { type: Date, default: Date.now }
 });
 
-const SettingSchema = new mongoose.Schema({ 
-    key: { type: String, unique: true }, 
-    value: mongoose.Schema.Types.Mixed 
-});
-
+const Setting = mongoose.model('Setting', new mongoose.Schema({ key: { type: String, unique: true }, value: mongoose.Schema.Types.Mixed }));
 const Ban = mongoose.model('Ban', new mongoose.Schema({ userId: String, reason: String }));
 const Stat = mongoose.model('Stat', new mongoose.Schema({ command: String, count: { type: Number, default: 0 } }));
 const UserStat = mongoose.model('UserStat', UserStatsSchema);
-const Setting = mongoose.model('Setting', SettingSchema);
 
 const buffer = new Map();
 setInterval(async () => {
@@ -31,10 +26,7 @@ setInterval(async () => {
         ops.push({
             updateOne: {
                 filter: { userId },
-                update: { 
-                    $inc: { count: data.count }, 
-                    $set: { lastActive: new Date(), name: data.name } 
-                },
+                update: { $inc: { count: data.count }, $set: { lastActive: new Date(), name: data.name } },
                 upsert: true
             }
         });
@@ -44,16 +36,11 @@ setInterval(async () => {
 }, 30000);
 
 module.exports = {
-    addBan: (id, reason) => {
-        if (global.ADMINS.has(id)) return Promise.resolve();
-        return Ban.create({ userId: id, reason });
-    },
+    addBan: (id, reason) => global.ADMINS.has(id) ? Promise.resolve() : Ban.create({ userId: id, reason }),
     removeBan: (id) => Ban.deleteOne({ userId: id }),
     loadBansIntoMemory: async (cb) => {
-        try {
-            const rows = await Ban.find({});
-            cb(new Set(rows.map(r => r.userId)));
-        } catch (e) { cb(new Set()); }
+        try { const rows = await Ban.find({}); cb(new Set(rows.map(r => r.userId))); } 
+        catch (e) { cb(new Set()); }
     },
     syncUser: (userId, fb = null) => {
         const current = buffer.get(userId) || { count: 0, name: 'Messenger User' };
@@ -68,11 +55,7 @@ module.exports = {
     },
     setRole: (userId, role) => UserStat.updateOne({ userId }, { role }, { upsert: true }),
     saveSetting: (key, value) => Setting.findOneAndUpdate({ key }, { value }, { upsert: true }),
-    getSetting: async (key) => {
-        const res = await Setting.findOne({ key });
-        return res?.value;
-    },
-    getUserData: (userId) => UserStat.findOne({ userId }),
+    getSetting: async (key) => (await Setting.findOne({ key }))?.value,
     getAllUsers: () => UserStat.find({}).lean(),
     trackCommandUsage: (name) => Stat.updateOne({ command: name }, { $inc: { count: 1 } }, { upsert: true }).exec(),
     getStats: () => Stat.find({}).sort({ count: -1 }).limit(10),
