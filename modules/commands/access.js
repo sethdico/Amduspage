@@ -11,7 +11,8 @@ module.exports.run = async function ({ args, reply }) {
         return reply(msg || "No special roles.");
     }
     if (!targetID || !role) return reply("Usage: access set <uid> <moderator/user>");
-    if (global.ADMINS.has(targetID)) return reply("Admins are immune.");
+    if (global.ADMINS.has(String(targetID))) return reply("Admins are immune.");
     await db.setRole(targetID, role);
+    global.userCache.delete(`role_${targetID}`);
     reply(`Role for ${targetID} updated to ${role}.`);
 };
