@@ -5,40 +5,39 @@ module.exports.config = {
     aliases: ["unban"],
     author: "Sethdico",
     category: "Admin",
-    adminOnly: true,
-    usePrefix: false
+    adminOnly: true
 };
 
 module.exports.run = async function ({ event, args, reply }) {
-    const content = (event.message?.text || event.postback?.payload || "").trim().toLowerCase();
-    const isUnban = content.startsWith("unban") || args[0] === "unban";
+    const body = (event.message?.text || "").trim().toLowerCase();
+    const isUnban = body.startsWith("unban") || args[0] === "unban";
 
     let targetID = args[0];
-    let reason = args.slice(1).join(" ") || "violation";
+    let reason = args.slice(1).join(" ") || "No reason";
 
-    if (args[0] === "unban" && args[1]) {
-        targetID = args[1];
-    }
+    if (args[0] === "unban") targetID = args[1];
 
-    if (!targetID || isNaN(targetID)) {
-        return reply("usage: ban/unban <uid>");
+    if (!targetID || isNaN(targetID)) return reply("Please provide a valid User ID.");
+
+    if (global.ADMINS.has(targetID)) {
+        return reply("You cannot ban an administrator.");
     }
 
     if (isUnban) {
         try {
             await db.removeBan(targetID);
             global.BANNED_USERS.delete(targetID);
-            return reply(`unbanned ${targetID}.`);
+            return reply(`Successfully unbanned user ${targetID}.`);
         } catch (e) {
-            return reply("failed to unban.");
+            return reply("Unban failed.");
         }
     }
 
     try {
         await db.addBan(targetID, reason);
         global.BANNED_USERS.add(targetID);
-        return reply(`banned ${targetID}.`);
+        return reply(`User ${targetID} has been banned.`);
     } catch (e) {
-        return reply("failed to ban.");
+        return reply("Ban failed.");
     }
 };
