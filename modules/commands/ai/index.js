@@ -55,7 +55,7 @@ async function enforceSafety(userId, reply) {
 module.exports.config = {
   name: "amdus",
   author: "sethdico",
-  version: "105.0",
+  version: "110.0",
   category: "AI",
   description: "real time info, image, video and document recognition, plus file and image generation.",
   adminOnly: false,
@@ -114,10 +114,14 @@ module.exports.run = async function ({ event, args, api, reply }) {
         }
     }
 
+    if (context.length > 0 && !query) {
+        userLock.delete(userId);
+        return reply("media received. reply to it with your question to analyze.");
+    }
+
     let finalPrompt = "";
-    
     if (context.length > 0) {
-        finalPrompt = `Here is media/content provided by the user for context:\n${context.join("\n")}\n\nUSER REQUEST: ${query || "Describe this content detailedly."}\n\nNote: If the user asks a question, answer it based on the media above. If no question is asked, describe the media.`;
+        finalPrompt = `User Media Context:\n${context.join("\n")}\n\nUSER INSTRUCTION: ${query}`;
     } else {
         finalPrompt = query;
     }
