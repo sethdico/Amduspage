@@ -1,5 +1,6 @@
 const db = require("../modules/core/database");
 const cooldowns = new Map();
+const userLock = new Set();
 
 module.exports = async function (event, api) {
     if (!event.sender?.id) return;
@@ -9,27 +10,24 @@ module.exports = async function (event, api) {
     const isAdmin = global.ADMINS.has(id);
 
     try {
-        const userInfo = await api.getUserInfo(id).catch(() => ({ name: 'user' }));
-        db.syncUser(id, userInfo);
+        const userInfo = await api.getUserInfo(id);
+        db.syncUser(id, userInfo || { name: "Messenger User" });
     } catch (e) {
         db.syncUser(id);
     }
 
     if (global.MAINTENANCE_MODE && !isAdmin) {
-        return reply(`maintenance mode: ${global.MAINTENANCE_REASON}`);
+        return reply(`The bot is currently under maintenance. Reason: ${global.MAINTENANCE_REASON || "Updates"}`);
     }
 
     if (event.postback?.payload === "GET_STARTED_PAYLOAD") {
-        return reply("ask questions or type help to see commands.");
+        return reply(`Hello! I am ${global.BOT_NAME}. How can I help you today?`);
     }
 
     if (event.message?.is_echo) return;
     
     const body = (event.message?.text || event.postback?.payload || "").trim();
-    
-    const hasAttachments = event.message?.attachments?.length > 0 || event.message?.reply_to?.attachments?.length > 0;
-    
-    if (!body && !hasAttachments) return;
+    if (!body && !event.message?.attachments) return;
 
     const args = body.split(/\s+/);
     const cmdName = args.shift()?.toLowerCase();
@@ -39,35 +37,35 @@ module.exports = async function (event, api) {
 
     if (command) {
         if (command.config.adminOnly && !isAdmin) return;
-
+        
         if (command.config.cooldown && !isAdmin) {
             const key = `${id}-${command.config.name}`;
             const lastUsed = cooldowns.get(key) || 0;
             const timeLeft = (lastUsed + (command.config.cooldown * 1000)) - Date.now();
-
-            if (timeLeft > 0) return reply(`wait ${Math.ceil(timeLeft / 1000)}s`);
+            if (timeLeft > 0) return reply(`Please wait ${Math.ceil(timeLeft / 1000)}s.`);
             cooldowns.set(key, Date.now());
         }
 
         try {
-            db.trackCommandUsage(cmdName);
+            db.trackCommandUsage(command.config.name);
             await command.run({ event, args, api, reply });
+            return;
         } catch (e) { 
-            console.error(`error running ${cmdName}:`, e.message);
-            reply("error executing command."); 
+            return reply("An error occurred while running the command."); 
         }
     } 
-    else {
-        const ai = global.client.commands.get("amdus");
-        if (ai) {
-            try {
-                if (api.sendTypingIndicator) api.sendTypingIndicator(true, id).catch(()=>{});
-                await ai.run({ event, args: body ? body.split(/\s+/) : [], api, reply });
-            } catch (e) {
-                console.error("AI Fallback Error:", e);
-            } finally { 
-                if (api.sendTypingIndicator) api.sendTypingIndicator(false, id).catch(()=>{}); 
-            }
+
+    const ai = global.client.commands.get("amdus");
+    if (ai && !userLock.has(id)) {
+        userLock.add(id);
+        const safety = setTimeout(() => userLock.delete(id), 45000);
+        try {
+            if (api.sendTypingIndicator) api.sendTypingIndicator(true, id);
+            await ai.run({ event, args: body.split(/\s+/), api, reply });
+        } finally { 
+            clearTimeout(safety);
+            userLock.delete(id);
+            if (api.sendTypingIndicator) api.sendTypingIndicator(false, id); 
         }
     }
 };
