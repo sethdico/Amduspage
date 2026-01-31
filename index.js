@@ -22,6 +22,7 @@ global.CACHE_PATH = path.join(__dirname, 'cache');
 global.client = { commands: new Map(), aliases: new Map() };
 global.BANNED_USERS = new Set();
 global.MAINTENANCE_MODE = false;
+global.MONITOR_MODE = false;
 
 global.sessions = new CacheManager(CONSTANTS.MAX_SESSIONS, CONSTANTS.ONE_HOUR);
 global.userCache = new CacheManager(CONSTANTS.MAX_CACHE_SIZE, CONSTANTS.ONE_DAY);
@@ -58,16 +59,17 @@ function loadCommands(dir) {
 }
 
 (async () => {
-    await new Promise(resolve => {
-        db.loadBansIntoMemory((banSet) => {
-            global.BANNED_USERS = banSet;
-            resolve();
-        });
-    });
+    await new Promise(resolve => db.loadBansIntoMemory(banSet => { global.BANNED_USERS = banSet; resolve(); }));
+    
+    const savedDisabled = await db.getSetting("disabled_cmds");
+    global.disabledCommands = new Set(savedDisabled || []);
+
     loadCommands(path.join(__dirname, 'modules/commands'));
+    
     app.use(parser.json({ limit: '50mb' }));
     app.use(validateInput);
     app.use(rateLimiter);
+    
     app.get('/', (req, res) => res.json({ status: 'online', uptime: process.uptime() }));
     app.get('/webhook', (req, res) => {
         const vToken = process.env.VERIFY_TOKEN || config.VERIFY_TOKEN;
@@ -78,9 +80,7 @@ function loadCommands(dir) {
         res.sendStatus(200);
         webhook.listen(req.body);
     });
+    
     const PORT = process.env.PORT || 8080;
     app.listen(PORT);
 })();
-
-process.on('unhandledRejection', (err) => console.error(err.message));
-process.on('uncaughtException', (err) => console.error(err.message));
