@@ -8,13 +8,20 @@ if (uri) {
 const UserStatsSchema = new mongoose.Schema({
     userId: { type: String, unique: true, index: true },
     name: { type: String, default: "Messenger User" },
+    role: { type: String, default: "user" },
     count: { type: Number, default: 0 },
     lastActive: { type: Date, default: Date.now }
+});
+
+const SettingSchema = new mongoose.Schema({ 
+    key: { type: String, unique: true }, 
+    value: mongoose.Schema.Types.Mixed 
 });
 
 const Ban = mongoose.model('Ban', new mongoose.Schema({ userId: String, reason: String }));
 const Stat = mongoose.model('Stat', new mongoose.Schema({ command: String, count: { type: Number, default: 0 } }));
 const UserStat = mongoose.model('UserStat', UserStatsSchema);
+const Setting = mongoose.model('Setting', SettingSchema);
 
 const buffer = new Map();
 setInterval(async () => {
@@ -54,8 +61,20 @@ module.exports = {
         if (fb?.name) current.name = fb.name;
         buffer.set(userId, current);
     },
+    getRole: async (userId) => {
+        if (global.ADMINS.has(userId)) return "admin";
+        const user = await UserStat.findOne({ userId });
+        return user?.role || "user";
+    },
+    setRole: (userId, role) => UserStat.updateOne({ userId }, { role }, { upsert: true }),
+    saveSetting: (key, value) => Setting.findOneAndUpdate({ key }, { value }, { upsert: true }),
+    getSetting: async (key) => {
+        const res = await Setting.findOne({ key });
+        return res?.value;
+    },
     getUserData: (userId) => UserStat.findOne({ userId }),
-    getAllUsers: () => UserStat.find({}).sort({ lastActive: -1 }).lean(),
+    getAllUsers: () => UserStat.find({}).lean(),
     trackCommandUsage: (name) => Stat.updateOne({ command: name }, { $inc: { count: 1 } }, { upsert: true }).exec(),
+    getStats: () => Stat.find({}).sort({ count: -1 }).limit(10),
     UserStat
 };
