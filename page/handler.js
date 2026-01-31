@@ -7,8 +7,13 @@ module.exports = async function (event, api) {
     
     const id = event.sender.id;
     const reply = (msg) => api.sendMessage(msg, id);
+
+    let userRole = global.userCache.get(`role_${id}`);
+    if (!userRole) {
+        userRole = await db.getRole(id);
+        global.userCache.set(`role_${id}`, userRole); 
+    }
     
-    const userRole = await db.getRole(id);
     const isAdmin = userRole === "admin";
     const isMod = userRole === "moderator" || isAdmin;
 
@@ -25,9 +30,7 @@ module.exports = async function (event, api) {
         }
     }
 
-    if (global.MAINTENANCE_MODE && !isAdmin) {
-        return reply(`Bot is under maintenance.`);
-    }
+    if (global.MAINTENANCE_MODE && !isAdmin) return;
 
     if (event.message?.is_echo) return;
     
@@ -41,18 +44,18 @@ module.exports = async function (event, api) {
                     global.client.commands.get(global.client.aliases.get(cmdName));
 
     if (command) {
-        if (command.config.adminOnly && !isAdmin) return;
-        if (command.config.modOnly && !isMod) return;
-
         if (global.disabledCommands?.has(command.config.name) && !isAdmin) {
             return reply("This command is temporarily disabled.");
         }
+
+        if (command.config.adminOnly && !isAdmin) return;
+        if (command.config.modOnly && !isMod) return;
 
         if (command.config.cooldown && !isAdmin) {
             const key = `${id}-${command.config.name}`;
             const lastUsed = cooldowns.get(key) || 0;
             const timeLeft = (lastUsed + (command.config.cooldown * 1000)) - Date.now();
-            if (timeLeft > 0) return reply(`Cooldown: ${Math.ceil(timeLeft / 1000)}s`);
+            if (timeLeft > 0) return reply(`Wait ${Math.ceil(timeLeft / 1000)}s`);
             cooldowns.set(key, Date.now());
         }
 
@@ -61,12 +64,12 @@ module.exports = async function (event, api) {
             await command.run({ event, args, api, reply });
             return;
         } catch (e) { 
-            return reply("Command execution error."); 
+            return reply("Error executing command."); 
         }
     } 
 
     const ai = global.client.commands.get("amdus");
-    if (ai && !userLock.has(id)) {
+    if (ai && !userLock.has(id) && !global.disabledCommands?.has("amdus")) {
         userLock.add(id);
         const safety = setTimeout(() => userLock.delete(id), 45000);
         try {
