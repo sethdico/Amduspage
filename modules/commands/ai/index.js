@@ -82,7 +82,7 @@ module.exports.config = {
     author: "sethdico",
     version: "160.0",
     category: "AI",
-    description: "autonomous agent with sota reasoning, vision, and tool permissions.",
+    description: "Main AI. real time info, image/doc generation and image/doc/videos recognition.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 0,
