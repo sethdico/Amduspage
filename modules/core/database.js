@@ -20,8 +20,16 @@ const BanSchema = new mongoose.Schema({
     expiresAt: { type: Date, default: null }
 });
 
+const ReminderSchema = new mongoose.Schema({
+    id: String,
+    userId: String,
+    message: String,
+    fireAt: { type: Date, expires: 0 }
+});
+
 const Setting = mongoose.model('Setting', new mongoose.Schema({ key: { type: String, unique: true }, value: mongoose.Schema.Types.Mixed }));
 const Ban = mongoose.model('Ban', BanSchema);
+const Reminder = mongoose.model('Reminder', ReminderSchema);
 const Stat = mongoose.model('Stat', new mongoose.Schema({ command: String, count: { type: Number, default: 0 } }));
 const UserStat = mongoose.model('UserStat', UserStatsSchema);
 
@@ -45,14 +53,11 @@ setInterval(async () => {
 module.exports = {
     Ban,
     UserStat,
+    Reminder,
     addBan: async (id, reason, level, durationMs) => {
         if (global.ADMINS.has(String(id))) return;
         const expiresAt = durationMs ? new Date(Date.now() + durationMs) : null;
-        await Ban.findOneAndUpdate(
-            { userId: id },
-            { reason, level, expiresAt },
-            { upsert: true }
-        );
+        await Ban.findOneAndUpdate({ userId: id }, { reason, level, expiresAt }, { upsert: true });
     },
     removeBan: (id) => Ban.deleteOne({ userId: id }),
     loadBansIntoMemory: async (cb) => {
@@ -69,6 +74,12 @@ module.exports = {
             }
             cb(activeBans);
         } catch (e) { cb(new Set()); }
+    },
+    addReminder: (r) => Reminder.create(r),
+    deleteReminder: (id) => Reminder.deleteOne({ id }),
+    getActiveReminders: async (cb) => {
+        try { cb(await Reminder.find({ fireAt: { $gt: new Date() } })); } 
+        catch { cb([]); }
     },
     syncUser: (userId, fb = null) => {
         const current = buffer.get(userId) || { count: 0, name: 'Messenger User' };
