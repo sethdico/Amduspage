@@ -13,8 +13,15 @@ const UserStatsSchema = new mongoose.Schema({
     lastActive: { type: Date, default: Date.now }
 });
 
+const BanSchema = new mongoose.Schema({
+    userId: { type: String, unique: true },
+    reason: String,
+    level: { type: Number, default: 1 },
+    expiresAt: { type: Date, default: null }
+});
+
 const Setting = mongoose.model('Setting', new mongoose.Schema({ key: { type: String, unique: true }, value: mongoose.Schema.Types.Mixed }));
-const Ban = mongoose.model('Ban', new mongoose.Schema({ userId: String, reason: String }));
+const Ban = mongoose.model('Ban', BanSchema);
 const Stat = mongoose.model('Stat', new mongoose.Schema({ command: String, count: { type: Number, default: 0 } }));
 const UserStat = mongoose.model('UserStat', UserStatsSchema);
 
@@ -36,11 +43,32 @@ setInterval(async () => {
 }, 30000);
 
 module.exports = {
-    addBan: (id, reason) => global.ADMINS.has(String(id)) ? Promise.resolve() : Ban.create({ userId: id, reason }),
+    Ban,
+    UserStat,
+    addBan: async (id, reason, level, durationMs) => {
+        if (global.ADMINS.has(String(id))) return;
+        const expiresAt = durationMs ? new Date(Date.now() + durationMs) : null;
+        await Ban.findOneAndUpdate(
+            { userId: id },
+            { reason, level, expiresAt },
+            { upsert: true }
+        );
+    },
     removeBan: (id) => Ban.deleteOne({ userId: id }),
     loadBansIntoMemory: async (cb) => {
-        try { const rows = await Ban.find({}); cb(new Set(rows.map(r => r.userId))); } 
-        catch (e) { cb(new Set()); }
+        try {
+            const now = new Date();
+            const allBans = await Ban.find({});
+            const activeBans = new Set();
+            for (const b of allBans) {
+                if (b.expiresAt && b.expiresAt < now) {
+                    await Ban.deleteOne({ userId: b.userId });
+                } else {
+                    activeBans.add(b.userId);
+                }
+            }
+            cb(activeBans);
+        } catch (e) { cb(new Set()); }
     },
     syncUser: (userId, fb = null) => {
         const current = buffer.get(userId) || { count: 0, name: 'Messenger User' };
@@ -58,6 +86,5 @@ module.exports = {
     getSetting: async (key) => (await Setting.findOne({ key }))?.value,
     getAllUsers: () => UserStat.find({}).lean(),
     trackCommandUsage: (name) => Stat.updateOne({ command: name }, { $inc: { count: 1 } }, { upsert: true }).exec(),
-    getStats: () => Stat.find({}).sort({ count: -1 }).limit(10),
-    UserStat
+    getStats: () => Stat.find({}).sort({ count: -1 }).limit(10)
 };
