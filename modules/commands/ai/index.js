@@ -11,14 +11,9 @@ const COOLDOWN_MS = 4000;
 const lastRequests = new Map();
 const processedMids = new Set();
 const userLock = new Set();
+const BAN_LEVELS = { 1: 10800000, 2: 259200000, 3: null };
 
 setInterval(() => processedMids.clear(), 60000);
-
-const BAN_LEVELS = {
-    1: { label: "3 hours", ms: 3 * 60 * 60 * 1000 },
-    2: { label: "3 days", ms: 3 * 24 * 60 * 60 * 1000 },
-    3: { label: "permanent", ms: null }
-};
 
 async function executeAction(action, event, api, reply) {
     const cmdName = action.tool.toLowerCase();
@@ -34,20 +29,17 @@ async function executeAction(action, event, api, reply) {
         }
         return;
     }
-    try {
-        await command.run({ event, args: [action.query], api, reply });
-    } catch (e) {}
+    try { await command.run({ event, args: [action.query], api, reply }); } catch (e) {}
 }
 
 async function handleTieredBan(userId, reason, reply) {
-    if (global.ADMINS.has(userId)) return reply("safety: admin bypass triggered.");
+    if (global.ADMINS.has(userId)) return reply("safety: admin bypass.");
     const existing = await db.Ban.findOne({ userId });
     const level = existing ? Math.min(existing.level + 1, 3) : 1;
-    const config = BAN_LEVELS[level];
-    await db.addBan(userId, reason, level, config.ms);
+    const duration = BAN_LEVELS[level];
+    await db.addBan(userId, reason, level, duration);
     global.BANNED_USERS.add(userId);
-    const durationText = config.ms ? `for ${config.label}` : "permanently";
-    reply(`🚫 security: banned ${durationText}.\nreason: ${reason}`);
+    reply(`🚫 security: banned ${duration ? (level === 1 ? "3h" : "3d") : "permanently"}.\nreason: ${reason}`);
 }
 
 async function uploadFile({ senderId, data, token, reply }) {
@@ -68,9 +60,9 @@ async function uploadFile({ senderId, data, token, reply }) {
 module.exports.config = {
     name: "amdus",
     author: "sethdico",
-    version: "185.0",
+    version: "200.0",
     category: "AI",
-    description: "Main AI. Real-time info, image/doc/videos recognition, image/file generation and can BAN users and use some of the bots commands.",
+    description: "SOTA reasoning agent with universal LaTeX rendering and tiered safety.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 0,
@@ -105,37 +97,27 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 if (['.txt', '.js', '.json', '.md', '.py', '.docx', '.doc', '.pdf'].includes(ext)) context.push(`[document_url]: ${url}`);
             }
         }
-
         if (context.length > 0 && !query) {
             userLock.delete(userId);
             return reply("media received. reply with your question.");
         }
-
         const finalPrompt = context.length ? `${context.join("\n")}\n\nuser_query: ${query}` : query;
         if (!finalPrompt) {
             userLock.delete(userId);
             return reply("i am amdusbot.");
         }
-
         const session = getSession(userId);
         const res = await askChipp(finalPrompt, null, session);
-        if (!res || res.error) {
-            userLock.delete(userId);
-            return reply("api offline.");
-        }
-
-        if (res.data?.chatSessionId) saveSession(userId, res.data.chatSessionId);
         const text = parseAI(res);
         if (!text) {
             userLock.delete(userId);
             return reply("no response.");
         }
-
         try {
             const action = JSON.parse(text);
             if (action.action === "ban") {
                 userLock.delete(userId);
-                return handleTieredBan(userId, action.reason || "unethical behavior", reply);
+                return handleTieredBan(userId, action.reason || "violation", reply);
             }
             if (action.tool) {
                 userLock.delete(userId);
@@ -143,39 +125,41 @@ module.exports.run = async function ({ event, args, api, reply }) {
             }
         } catch (e) {}
 
-        const latex = text.match(/\$\$\s*([\s\S]*?)\s*\$\$/);
-        if (latex) {
-            const formula = latex[1].trim();
-            const cleanText = text.replace(/\$\$\s*[\s\S]*?\s*\$\$/g, "").trim();
+        const latexRegex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g;
+        const matches = text.match(latexRegex);
+        if (matches) {
+            let cleanText = text.replace(latexRegex, "").replace(/\s+/g, " ").trim();
             if (cleanText) await reply(cleanText.toLowerCase());
-            const renderUrl = `https://latex.codecogs.com/png.image?%5Cdpi%7B200%7D%20%5Cbg_white%20${encodeURIComponent(formula)}`;
-            await api.sendAttachment("image", renderUrl, userId);
-            return;
-        }
-
-        const jsonMatch = text.match(/\{"fileName":".*?","fileBase64":".*?"\}/s);
-        if (jsonMatch) {
-            const fileData = JSON.parse(jsonMatch[0]);
-            fileData.messageBody = text.substring(0, jsonMatch.index).trim();
-            await uploadFile({ senderId: userId, data: fileData, token, reply });
+            for (const formula of matches) {
+                const raw = formula.replace(/\$\$|\\\[|\\\]|\\\(|\\\)/g, "").trim();
+                const renderUrl = `https://latex.codecogs.com/png.image?%5Cdpi%7B200%7D%20%5Cbg_white%20${encodeURIComponent(raw)}`;
+                await api.sendAttachment("image", renderUrl, userId);
+            }
         } else {
-            const linkMatch = text.match(/(https?:\/\/[^\s)]+\.(?:pdf|docx|doc|xlsx|txt|jpg|png|mp4|zip)(?:\?[^\s)]*)?)/i);
-            if (linkMatch) {
-                const url = linkMatch[0];
-                const msgBody = text.replace(url, "").trim();
-                const fileRes = await axios.get(url, { responseType: 'arraybuffer' });
-                const buffer = Buffer.from(fileRes.data);
-                const type = fileRes.headers['content-type']?.startsWith('image/') ? 'image' : (fileRes.headers['content-type']?.startsWith('video/') ? 'video' : 'file');
-                const form = new FormData();
-                form.append('recipient', JSON.stringify({ id: userId }));
-                form.append('message', JSON.stringify({ attachment: { type, payload: {} } }));
-                form.append('filedata', buffer, { filename: path.basename(url.split("?")[0]) || "file.bin", contentType: fileRes.headers['content-type'] });
-                if (msgBody) await reply(msgBody);
-                await axios.post(`https://graph.facebook.com/v21.0/me/messages?access_token=${token}`, form, {
-                    headers: form.getHeaders(), maxContentLength: Infinity, maxBodyLength: Infinity
-                });
+            const jsonMatch = text.match(/\{"fileName":".*?","fileBase64":".*?"\}/s);
+            if (jsonMatch) {
+                const fileData = JSON.parse(jsonMatch[0]);
+                fileData.messageBody = text.substring(0, jsonMatch.index).trim();
+                await uploadFile({ senderId: userId, data: fileData, token, reply });
             } else {
-                await reply(text.toLowerCase());
+                const linkMatch = text.match(/(https?:\/\/[^\s)]+\.(?:pdf|docx|doc|xlsx|txt|jpg|png|mp4|zip)(?:\?[^\s)]*)?)/i);
+                if (linkMatch) {
+                    const url = linkMatch[0];
+                    const msg = text.replace(url, "").trim();
+                    const fileRes = await axios.get(url, { responseType: 'arraybuffer' });
+                    const buffer = Buffer.from(fileRes.data);
+                    const type = fileRes.headers['content-type']?.startsWith('image/') ? 'image' : (fileRes.headers['content-type']?.startsWith('video/') ? 'video' : 'file');
+                    const form = new FormData();
+                    form.append('recipient', JSON.stringify({ id: userId }));
+                    form.append('message', JSON.stringify({ attachment: { type, payload: {} } }));
+                    form.append('filedata', buffer, { filename: path.basename(url.split("?")[0]) || "file.bin", contentType: fileRes.headers['content-type'] });
+                    if (msg) await reply(msg);
+                    await axios.post(`https://graph.facebook.com/v21.0/me/messages?access_token=${token}`, form, {
+                        headers: form.getHeaders(), maxContentLength: Infinity, maxBodyLength: Infinity
+                    });
+                } else {
+                    await reply(text.toLowerCase());
+                }
             }
         }
     } catch (err) {
