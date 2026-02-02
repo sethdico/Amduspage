@@ -23,41 +23,29 @@ const BAN_LEVELS = {
 async function executeAction(action, event, api, reply) {
     const cmdName = action.tool.toLowerCase();
     const command = global.client.commands.get(cmdName) || global.client.commands.get(global.client.aliases.get(cmdName));
-
     if (!command) return;
-
-    if (cmdName === "remind") {
-        return await command.run({ event, args: [action.time, action.msg], api, reply });
-    }
-
+    if (cmdName === "remind") return await command.run({ event, args: [action.time, action.msg], api, reply });
     if (cmdName === "pinterest") {
         try {
-            const count = action.count || 5;
-            await command.run({ event, args: [action.query, count.toString()], api, reply });
+            await command.run({ event, args: [action.query, (action.count || 5).toString()], api, reply });
         } catch (e) {
             const gmage = global.client.commands.get("gmage");
             if (gmage) await gmage.run({ event, args: [action.query], api, reply });
         }
         return;
     }
-
     try {
         await command.run({ event, args: [action.query], api, reply });
-    } catch (e) {
-        console.error(e.message);
-    }
+    } catch (e) {}
 }
 
 async function handleTieredBan(userId, reason, reply) {
     if (global.ADMINS.has(userId)) return reply("safety: admin bypass triggered.");
-
     const existing = await db.Ban.findOne({ userId });
     const level = existing ? Math.min(existing.level + 1, 3) : 1;
     const config = BAN_LEVELS[level];
-
     await db.addBan(userId, reason, level, config.ms);
     global.BANNED_USERS.add(userId);
-
     const durationText = config.ms ? `for ${config.label}` : "permanently";
     reply(`🚫 security: banned ${durationText}.\nreason: ${reason}`);
 }
@@ -80,9 +68,9 @@ async function uploadFile({ senderId, data, token, reply }) {
 module.exports.config = {
     name: "amdus",
     author: "sethdico",
-    version: "160.0",
+    version: "185.0",
     category: "AI",
-    description: "Main AI. real time info, image/doc generation and image/doc/videos recognition.",
+    description: "Main AI. Real-time info, image/doc/videos recognition, image/file generation and can BAN users and use some of the bots commands.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 0,
@@ -91,27 +79,21 @@ module.exports.config = {
 module.exports.run = async function ({ event, args, api, reply }) {
     const userId = event.sender.id;
     const mid = event.message?.mid;
-
     if (mid && processedMids.has(mid)) return;
     if (userLock.has(userId)) return;
-
     const now = Date.now();
     if (now - (lastRequests.get(userId) || 0) < COOLDOWN_MS && !global.ADMINS.has(userId)) return;
-
     if (mid) processedMids.add(mid);
     lastRequests.set(userId, now);
     userLock.add(userId);
-
     const query = args.join(" ").trim();
     const token = global.PAGE_ACCESS_TOKEN;
-
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, userId);
 
     try {
         const attachments = [...(event.message?.reply_to?.attachments || []), ...(event.message?.attachments || [])];
         let context = [];
         const seen = new Set();
-
         for (const file of attachments) {
             const url = file.payload.url;
             if (seen.has(url)) continue;
@@ -160,6 +142,16 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 return executeAction(action, event, api, reply);
             }
         } catch (e) {}
+
+        const latex = text.match(/\$\$\s*([\s\S]*?)\s*\$\$/);
+        if (latex) {
+            const formula = latex[1].trim();
+            const cleanText = text.replace(/\$\$\s*[\s\S]*?\s*\$\$/g, "").trim();
+            if (cleanText) await reply(cleanText.toLowerCase());
+            const renderUrl = `https://latex.codecogs.com/png.image?%5Cdpi%7B200%7D%20%5Cbg_white%20${encodeURIComponent(formula)}`;
+            await api.sendAttachment("image", renderUrl, userId);
+            return;
+        }
 
         const jsonMatch = text.match(/\{"fileName":".*?","fileBase64":".*?"\}/s);
         if (jsonMatch) {
