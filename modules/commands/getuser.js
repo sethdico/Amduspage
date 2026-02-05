@@ -4,6 +4,7 @@ global.tempUserList = global.tempUserList || new Map();
 
 module.exports.config = {
     name: "getuser",
+    author: "sethdico",
     category: "Admin",
     adminOnly: true,
     usePrefix: false
@@ -15,58 +16,43 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
     if (index && !isNaN(index)) {
         const list = global.tempUserList.get(senderID);
-        if (!list) return reply("list empty. type getuser first.");
+        if (!list) return reply("list expired. type getuser.");
 
         const user = list[parseInt(index) - 1];
         if (!user) return reply("user not found.");
 
         const isBanned = global.BANNED_USERS.has(user.userId);
         
-        let msg = `name: ${user.name}\nid: ${user.userId}\nstatus: ${isBanned ? "banned" : "active"}\n`;
+        let msg = `name: ${user.name}\nid: ${user.userId}\nrole: ${user.role || 'user'}\n`;
+        msg += `status: ${isBanned ? "banned" : "active"}\n`;
         msg += `msgs: ${user.count || 0}\n`;
-        msg += `active: ${new Date(user.lastActive).toLocaleDateString()}`;
+        msg += `last: ${new Date(user.lastActive).toLocaleString()}`;
 
         const btns = [
             { type: "web_url", url: `https://www.facebook.com/${user.userId}`, title: "profile" },
-            { type: "postback", title: isBanned ? "unban" : "ban", payload: isBanned ? `unban ${user.userId}` : `ban ${user.userId}` }
+            { type: "postback", title: isBanned ? "unban" : "ban", payload: `${isBanned ? 'unban' : 'ban'} ${user.userId}` }
         ];
 
-        if (user.profilePic) api.sendAttachment("image", user.profilePic, senderID).catch(()=>{});
-        
-        return api.sendButton(msg, btns, senderID).catch(() => reply(msg));
+        return api.sendButton(msg.toLowerCase(), btns, senderID).catch(() => reply(msg.toLowerCase()));
     }
 
     try {
-        const all = await db.getAllUsers();
-        const others = all.filter(u => u.userId !== senderID).slice(0, 15);
+        const users = await db.UserStat.find().sort({ lastActive: -1 }).limit(20).lean();
 
-        if (others.length === 0) return reply("db empty.");
+        if (!users.length) return reply("db empty.");
 
-        const updated = await Promise.all(
-            others.map(async (u) => {
-                if (!u.name || u.name === "new user" || u.name === "user") {
-                    const fb = await api.getUserInfo(u.userId);
-                    if (fb && fb.name) {
-                        u.name = fb.name;
-                        u.profilePic = fb.pic;
-                        db.syncUser(u.userId, fb); 
-                    }
-                }
-                return u;
-            })
-        );
+        global.tempUserList.set(senderID, users);
 
-        global.tempUserList.set(senderID, updated);
-
-        let txt = "users list\n\n";
-        updated.forEach((u, i) => {
-            const isBanned = global.BANNED_USERS.has(u.userId);
-            txt += `${i + 1}. ${isBanned ? "🚫 " : ""}${u.name}\n   id: ${u.userId}\n`;
+        let txt = "user database\n\n";
+        users.forEach((u, i) => {
+            const status = global.BANNED_USERS.has(u.userId) ? "🚫 " : "";
+            const role = u.role !== "user" ? ` [${u.role}]` : "";
+            txt += `${i + 1}. ${status}${u.name}${role}\n   id: ${u.userId}\n`;
         });
-        txt += "\ntype getuser [number]";
+        txt += "\ntype getuser [number] for details.";
         
-        reply(txt);
+        reply(txt.toLowerCase());
     } catch (e) {
-        reply("failed to load list.");
+        reply("failed to fetch list.");
     }
 };
