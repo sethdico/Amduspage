@@ -1,51 +1,55 @@
 const db = require("../modules/core/database");
 const cooldowns = new Map();
+const activeRequests = new Set();
 const userLock = new Set();
 
 module.exports = async function (event, api) {
-    if (!event.sender?.id) return;
+    if (!event.sender?.id || event.message?.is_echo) return;
     
     const id = event.sender.id;
+    const mid = event.message?.mid;
     const reply = (msg) => api.sendMessage(msg, id);
 
-    let userRole = global.userCache.get(`role_${id}`);
-    if (!userRole) {
-        userRole = await db.getRole(id);
-        global.userCache.set(`role_${id}`, userRole); 
+    if (mid) {
+        if (activeRequests.has(mid)) return;
+        activeRequests.add(mid);
+        setTimeout(() => activeRequests.delete(mid), 60000);
+    }
+
+    let role = global.userCache.get(`role_${id}`);
+    if (!role) {
+        role = await db.getRole(id);
+        global.userCache.set(`role_${id}`, role); 
     }
     
-    const isAdmin = userRole === "admin";
-    const isMod = userRole === "moderator" || isAdmin;
+    const isAdmin = role === "admin";
+    const isMod = role === "moderator" || isAdmin;
 
-    try {
-        const userInfo = await api.getUserInfo(id);
-        db.syncUser(id, userInfo);
-    } catch (e) {
-        db.syncUser(id);
+    const userInfo = await api.getUserInfo(id);
+    db.syncUser(id, userInfo);
+
+    if (userInfo.name !== "messenger user") {
+        await db.UserStat.updateOne({ userId: id }, { name: userInfo.name }, { upsert: true });
     }
 
     if (global.MONITOR_MODE && !isAdmin) {
         for (const adminId of global.ADMINS) {
-            api.sendMessage(`[MONITOR] ${id}: ${event.message?.text || "Media"}`, adminId);
+            api.sendMessage(`[monitor] ${id}: ${event.message?.text || "media"}`, adminId);
         }
     }
 
     if (global.MAINTENANCE_MODE && !isAdmin) return;
 
-    if (event.message?.is_echo) return;
-    
     const body = (event.message?.text || event.postback?.payload || "").trim();
     if (!body && !event.message?.attachments) return;
 
     const args = body.split(/\s+/);
     const cmdName = args.shift()?.toLowerCase();
-    
-    const command = global.client.commands.get(cmdName) || 
-                    global.client.commands.get(global.client.aliases.get(cmdName));
+    const command = global.client.commands.get(cmdName) || global.client.commands.get(global.client.aliases.get(cmdName));
 
     if (command) {
         if (global.disabledCommands?.has(command.config.name) && !isAdmin) {
-            return reply("This command is temporarily disabled.");
+            return reply("command disabled.");
         }
 
         if (command.config.adminOnly && !isAdmin) return;
@@ -54,8 +58,8 @@ module.exports = async function (event, api) {
         if (command.config.cooldown && !isAdmin) {
             const key = `${id}-${command.config.name}`;
             const lastUsed = cooldowns.get(key) || 0;
-            const timeLeft = (lastUsed + (command.config.cooldown * 1000)) - Date.now();
-            if (timeLeft > 0) return reply(`Wait ${Math.ceil(timeLeft / 1000)}s`);
+            const remain = (lastUsed + (command.config.cooldown * 1000)) - Date.now();
+            if (remain > 0) return reply(`wait ${Math.ceil(remain / 1000)}s`);
             cooldowns.set(key, Date.now());
         }
 
@@ -64,7 +68,7 @@ module.exports = async function (event, api) {
             await command.run({ event, args, api, reply });
             return;
         } catch (e) { 
-            return reply("Error executing command."); 
+            return reply("error executing command."); 
         }
     } 
 
