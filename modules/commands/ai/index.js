@@ -15,14 +15,45 @@ const BAN_TIERS = { 1: 10800000, 2: 259200000, 3: null };
 
 setInterval(() => processedMids.clear(), 60000);
 
+async function executeAction(action, event, api, reply) {
+    const cmdName = action.tool?.toLowerCase();
+    const command = global.client.commands.get(cmdName) || global.client.commands.get(global.client.aliases.get(cmdName));
+    
+    if (!command) return;
+
+    if (cmdName === "remind") {
+        return await command.run({ event, args: [action.time, action.msg], api, reply });
+    }
+
+    if (cmdName === "pinterest") {
+        try {
+            await command.run({ event, args: [action.query, (action.count || 5).toString()], api, reply });
+        } catch (e) {
+            const gmage = global.client.commands.get("gmage");
+            if (gmage) await gmage.run({ event, args: [action.query], api, reply });
+        }
+        return;
+    }
+
+    try {
+        await command.run({ event, args: [action.query], api, reply });
+    } catch (e) {
+        console.error(`Tool execution error: ${e.message}`);
+    }
+}
+
 async function handleTieredBan(userId, reason, reply) {
     if (global.ADMINS.has(userId)) return reply("safety: admin bypass active.");
+
     const existing = await db.Ban.findOne({ userId });
     const level = existing ? Math.min(existing.level + 1, 3) : 1;
-    const duration = BAN_TIERS[level];
-    await db.addBan(userId, reason, level, duration);
+    const config = BAN_TIERS[level];
+
+    await db.addBan(userId, reason, level, config);
     global.BANNED_USERS.add(userId);
-    reply(`🚫 security: banned ${duration ? (level === 1 ? "3h" : "3d") : "permanently"}.\nreason: ${reason}`);
+
+    const durationText = config ? `for ${level === 1 ? "3h" : "3d"}` : "permanently";
+    reply(`🚫 security: banned ${durationText}.\nreason: ${reason}`);
 }
 
 async function upload(senderId, data, token, reply) {
@@ -50,8 +81,9 @@ module.exports.config = {
 };
 
 module.exports.run = async function ({ event, args, api, reply }) {
-    const uid = event.sender.id;
+    const uid = String(event.sender.id);
     const mid = event.message?.mid;
+
     if ((mid && processedMids.has(mid)) || userLock.has(uid)) return;
 
     const last = lastRequests.get(uid) || 0;
@@ -76,7 +108,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
             const ext = path.extname(url.split('?')[0]).toLowerCase();
             const type = f.type === "image" ? "image" : (f.type === "video" ? "video" : "document");
             if (f.type !== "file" || ['.txt', '.js', '.json', '.md', '.py', '.docx', '.doc', '.pdf'].includes(ext)) {
-                ctx.push(`[${type}_url]: ${url}`);
+                ctx.push(`[${type}_url]: ${f.payload.url}`);
             }
         }
 
@@ -85,15 +117,33 @@ module.exports.run = async function ({ event, args, api, reply }) {
             return reply("media received. reply with your question.");
         }
 
-        const res = await askChipp(ctx.length ? `${ctx.join("\n")}\n\nuser_query: ${query}` : query, null, getSession(uid));
+        const session = getSession(uid);
+        const res = await askChipp(ctx.length ? `${ctx.join("\n")}\n\nuser_query: ${query}` : query, null, session);
+        
+        if (!res || res.error) {
+            userLock.delete(uid);
+            return reply("api offline.");
+        }
+
+        if (res.data?.chatSessionId) {
+            saveSession(uid, res.data.chatSessionId);
+        }
+
         const text = parseAI(res);
         if (!text) { userLock.delete(uid); return reply("no response."); }
 
-        const json = text.match(/\{[\s\S]*?\}/);
-        if (json) {
+        const jsonMatch = text.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
             try {
-                const act = JSON.parse(json[0]);
-                if (act.action === "ban") { userLock.delete(uid); return await handleTieredBan(uid, act.reason, reply); }
+                const act = JSON.parse(jsonMatch[0]);
+                if (act.action === "ban") {
+                    userLock.delete(uid);
+                    return await handleTieredBan(uid, act.reason || "violation", reply);
+                }
+                if (act.tool) {
+                    userLock.delete(uid);
+                    return await executeAction(act, event, api, reply);
+                }
             } catch (e) {}
         }
 
