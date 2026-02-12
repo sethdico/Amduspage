@@ -114,7 +114,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
         if (ctx.length > 0 && !query) {
             userLock.delete(uid);
-            return reply("media received. reply with your question.");
+            return reply("media received. reply to the image with your question.");
         }
 
         const session = getSession(uid);
