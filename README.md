@@ -39,7 +39,6 @@ set these in your host (Render/Railway/Replit) or `.env` file:
 | `CHIPP_API_KEY` | main ai key (amdus) |
 | `CHIPP_MODEL` | ai model id |
 | `GEMINI_COOKIE` | `__Secure-1PSID` for gemini |
-| `MIMO_STUDIO_COOKIE` | cookie for mimo ai |
 | `OPENROUTER_KEY` | key for molmo vision |
 | `APY_TOKEN` | apyhub key for tempmail |
 | `GOOGLE_API_KEY` | google search api |
@@ -70,10 +69,6 @@ node index.js
 `amdus <query>` — main ai (supports image/files).
 
 `gemini <query>` — google gemini with vision.
-
-`mimo <query>` — conversational ai with visual context.
-
-`molmo <media>` — vision analysis for images/videos.
 
 `copilot`, `perplexity`, `gpt5` — other models.
 
