@@ -72,9 +72,9 @@ async function upload(senderId, data, token, reply) {
 module.exports.config = {
     name: "amdus",
     author: "sethdico",
-    version: "46.7",
+    version: "46.8",
     category: "AI",
-    description: "Main amdus ai. (AI may change its function over time so check the bots post)",
+    description: "Main amdus ai. Video/image/document recognition, file generation and image edit/generation, real-time info and able to use some of the commands. ",
     adminOnly: false,
     usePrefix: false,
     cooldown: 0,
@@ -114,7 +114,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
         if (ctx.length > 0 && !query) {
             userLock.delete(uid);
-            return reply("media received. reply to the image with your question.");
+            return reply("media received. reply to the image/video/doc/docx with your question.");
         }
 
         const session = getSession(uid);
