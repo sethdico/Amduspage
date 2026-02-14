@@ -7,7 +7,7 @@ module.exports.config = {
     name: "tmailor",
     aliases: ["tm"],
     category: "Utility",
-    description: "tmailor.com logic",
+    description: "tmailor.com scrape temporary mail",
     usage: "tmailor gen | tmailor inbox"
 };
 
