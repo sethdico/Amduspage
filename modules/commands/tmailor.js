@@ -7,7 +7,7 @@ module.exports.config = {
     name: "tmailor",
     aliases: ["tm"],
     category: "Utility",
-    description: "tmailor.com scrape temporary mail",
+    description: "tmailor.com extraction engine",
     usage: "tmailor gen | tmailor inbox"
 };
 
@@ -18,22 +18,22 @@ module.exports.run = async ({ event, args, reply }) => {
     
     const headers = { 
         "Content-Type": "application/json",
+        "Listid": "170a81ff-483a-4ec3-9571-d3318af54d0b",
         "Cookie": "setlanguage=en; wk=1",
         "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Mobile Safari/537.36"
     };
 
-    try {
-        await http.post(apiUrl, {
+    const pulse = async () => {
+        return await http.post(apiUrl, {
             action: "checktokenlive",
             fbToken: null,
             curentToken: SESSION_TOKEN
         }, { headers });
-    } catch (e) {
-        return reply("handshake failed.");
-    }
+    };
 
     if (action === "gen") {
         try {
+            await pulse();
             const { data } = await http.post(apiUrl, {
                 action: "newemail",
                 curentToken: SESSION_TOKEN,
@@ -42,19 +42,20 @@ module.exports.run = async ({ event, args, reply }) => {
 
             if (data.msg === "ok") {
                 sessions.set(id, data.accesstoken);
-                return reply(`email: ${data.email}\n\ntype 'tmailor inbox' to check messages.`);
+                return reply(`email: ${data.email}\n\ntype 'tm inbox' to read messages.`);
             }
-            return reply("error: " + data.msg);
+            return reply(`server error: ${data.msg}`);
         } catch (e) {
-            return reply("connection failed.");
+            return reply("connection failed during generation.");
         }
     }
 
     if (action === "inbox") {
         const userToken = sessions.get(id);
-        if (!userToken) return reply("type 'tmailor gen' first.");
+        if (!userToken) return reply("type 'tm gen' first.");
 
         try {
+            await pulse();
             const { data } = await http.post(apiUrl, {
                 action: "listinbox",
                 accesstoken: userToken,
@@ -62,12 +63,12 @@ module.exports.run = async ({ event, args, reply }) => {
                 curentToken: SESSION_TOKEN
             }, { headers });
 
-            if (data.msg !== "ok") return reply("server error: " + data.msg);
+            if (data.msg !== "ok") return reply(`session error: ${data.msg}`);
 
             const emails = data.data;
             if (!emails || emails.length === 0) return reply("inbox is empty.");
 
-            let response = "inbox contents:\n\n";
+            let response = "ðŸ“¥ inbox:\n\n";
             emails.forEach((mail, index) => {
                 response += `${index + 1}. from: ${mail.sender}\nsubject: ${mail.subject}\n\n`;
             });
@@ -77,5 +78,5 @@ module.exports.run = async ({ event, args, reply }) => {
         }
     }
 
-    return reply("usage: tmailor gen | tmailor inbox");
+    return reply("usage: tm gen | tm inbox");
 };
