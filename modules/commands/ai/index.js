@@ -38,7 +38,7 @@ async function executeAction(action, event, api, reply) {
     try {
         await command.run({ event, args: [action.query], api, reply });
     } catch (e) {
-        console.error(`Tool execution error: ${e.message}`);
+        console.error(e.message);
     }
 }
 
@@ -53,7 +53,7 @@ async function handleTieredBan(userId, reason, reply) {
     global.BANNED_USERS.add(userId);
 
     const durationText = config ? `for ${level === 1 ? "3h" : "3d"}` : "permanently";
-    reply(`🚫 security: banned ${durationText}.\nreason: ${reason}`);
+    reply(`ðŸš« security: banned ${durationText}.\nreason: ${reason}`);
 }
 
 async function upload(senderId, data, token, reply) {
@@ -132,6 +132,19 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const text = parseAI(res);
         if (!text) { userLock.delete(uid); return reply("no response."); }
 
+        const urlRegex = /(https?:\/\/[^\s)]+)/gi;
+        const urls = text.match(urlRegex);
+        if (urls) {
+            for (let rawUrl of urls) {
+                const url = rawUrl.replace(/[).,]+$/, ''); 
+                if (url.includes('chipp-images')) {
+                    await api.sendAttachment("image", url, uid);
+                } else if (url.includes('chipp-application-files')) {
+                    await api.sendAttachment("file", url, uid);
+                }
+            }
+        }
+
         const jsonMatch = text.match(/\{[\s\S]*?\}/);
         if (jsonMatch) {
             try {
@@ -149,12 +162,12 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
         const math = text.match(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g);
         if (math) {
-            const clean = text.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g, "").replace(/\s+/g, " ").trim();
-            if (clean) await reply(clean.toLowerCase());
+            const cleanText = text.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g, "").trim();
+            if (cleanText) await reply(cleanText.toLowerCase());
             for (const m of math) {
                 const raw = m.replace(/\$\$|\\\[|\\\]|\\\(|\\\)/g, "").trim();
-                const url = `https://latex.codecogs.com/png.image?%5Cdpi%7B200%7D%20%5Cbg_white%20${encodeURIComponent(raw)}`;
-                await api.sendAttachment("image", url, uid);
+                const mathUrl = `https://latex.codecogs.com/png.image?%5Cdpi%7B200%7D%20%5Cbg_white%20${encodeURIComponent(raw)}`;
+                await api.sendAttachment("image", mathUrl, uid);
             }
         } else {
             const gen = text.match(/\{"fileName":".*?","fileBase64":".*?"\}/s);
@@ -163,7 +176,8 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 data.messageBody = text.substring(0, gen.index).trim();
                 await upload(uid, data, token, reply);
             } else {
-                await reply(text.toLowerCase());
+                const cleanText = urls ? text.replace(urlRegex, '').trim() : text;
+                if (cleanText) await reply(cleanText.toLowerCase());
             }
         }
     } catch (err) {
