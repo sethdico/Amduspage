@@ -1,111 +1,119 @@
-# amduspage
+<div align="center">
 
-![NodeJS](https://img.shields.io/badge/node.js-black?style=flat-square&logo=nodedotjs) ![MongoDB](https://img.shields.io/badge/mongodb-black?style=flat-square&logo=mongodb) ![Express](https://img.shields.io/badge/express-black?style=flat-square&logo=express)
+  <img src="https://media1.tenor.com/images/c6ad31fb0ee9060488594e45d172856e/tenor.gif?itemid=15454614" width="600" style="border-radius: 10px; box-shadow: 0px 5px 15px rgba(0,0,0,0.3);">
 
-optimized messenger pagebot. runs on nodejs.
-simple. fast. secure.
+  # AMDUSPAGE
 
-**maker**
-[seth asher salinguhay](https://www.facebook.com/seth09asher)
+  ![NodeJS](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+  ![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
+  ![Express](https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white)
 
----
+  <p style="font-size: 1.1rem; color: #555;">
+    <b>Optimized Messenger Pagebot.</b><br>
+    Simple. Fast. Secure.
+  </p>
 
-## structure
+  <p>
+    Created by <a href="https://www.facebook.com/seth09asher"><b>Seth Asher Salinguhay</b></a>
+  </p>
 
-- `modules/commands` — bot logic (ai, media, fun, etc)
-- `modules/core` — database, cache & queue managers
-- `modules/middleware` — rate limiting & validation
-- `page/src` — facebook api wrappers (carousel, buttons, etc)
-- `config/` — api endpoints & constants
-- `index.js` — main entry point
+</div>
 
----
+<br>
 
-## setup
+## 📂 Project Structure
 
-**1. basic config**
-fill `config/config.json` with your prefix and bot name.
+A modular architecture designed for scalability and ease of maintenance.
 
-**2. environment variables**
-set these in your host (Render/Railway/Replit) or `.env` file:
-
-| variable | description |
+| Directory | Description |
 | :--- | :--- |
-| `PAGE_ACCESS_TOKEN` | facebook page token |
-| `VERIFY_TOKEN` | webhook verification |
-| `APP_SECRET` | app secret for security |
-| `ADMINS` | your id (separated by comma) |
-| `MONGODB_URI` | mongodb connection string |
-| `CHIPP_API_KEY` | main ai key (amdus) |
-| `CHIPP_MODEL` | ai model id |
-| `GEMINI_COOKIE` | `__Secure-1PSID` for gemini |
-| `OPENROUTER_KEY` | key for molmo vision |
-| `APY_TOKEN` | apyhub key for tempmail |
-| `GOOGLE_API_KEY` | google search api |
-| `GOOGLE_CX` | google search engine id |
-| `NASA_API_KEY` | nasa photos |
-| `WOLFRAM_APP_ID` | wolfram alpha id |
-| `DICT_API_KEY` | merriam-webster key |
+| `modules/commands` | **Bot Logic** (AI, Media, Fun, Utility) |
+| `modules/core` | **System Core** (Database, Cache & Queue Managers) |
+| `modules/middleware` | **Security** (Rate limiting & Input Validation) |
+| `page/src` | **Interface** (Facebook API Wrappers: Carousel, Buttons) |
+| `config/` | **Configuration** (API Endpoints & Constants) |
+| `index.js` | **Entry Point** (Main Application File) |
 
 ---
 
-## deployment
+## 🛠️ Setup & Configuration
 
-**build command**
+### 1. Basic Configuration
+Navigate to `config/config.json` to define your bot's prefix and display name.
+
+### 2. Environment Variables
+Configure the following keys in your hosting environment (Render/Railway/Replit) or a local `.env` file.
+
+<details>
+<summary><b>Click to view required variables</b></summary>
+
+| Variable | Description |
+| :--- | :--- |
+| `PAGE_ACCESS_TOKEN` | Facebook Page Access Token |
+| `VERIFY_TOKEN` | Webhook Verification Token |
+| `APP_SECRET` | App Secret (for request signing) |
+| `ADMINS` | Administrator UIDs (separated by comma) |
+| `MONGODB_URI` | MongoDB Connection String |
+| `CHIPP_API_KEY` | Amdus AI Main Key |
+| `CHIPP_MODEL` | AI Model ID |
+| `GEMINI_COOKIE` | Google Gemini `__Secure-1PSID` |
+| `OPENROUTER_KEY` | Molmo Vision Key |
+| `APY_TOKEN` | Apyhub Token (Tempmail) |
+| `GOOGLE_API_KEY` | Google Search API Key |
+| `GOOGLE_CX` | Google Search Engine ID |
+| `NASA_API_KEY` | NASA Image API |
+| `WOLFRAM_APP_ID` | Wolfram Alpha App ID |
+| `DICT_API_KEY` | Merriam-Webster Dictionary Key |
+
+</details>
+
+---
+
+## 🚀 Deployment
+
+**1. Install Dependencies**
 ```bash
 npm install
 ```
 
-**start command**
+**2. Start Application**
 ```bash
 node index.js
 ```
 
 ---
 
-## commands
+## 🤖 Feature List
 
-**ai**
-`amdus <query>` — main ai (supports image/files).
+### 🧠 Artificial Intelligence
+*   `amdus <query>` — Main AI engine (supports image/file analysis).
+*   `gemini <query>` — Google Gemini integration with vision capabilities.
+*   `copilot`, `perplexity`, `gpt5` — Alternative LLM models.
 
-`gemini <query>` — google gemini with vision.
+### 🎬 Media Tools
+*   `alldl <url>` — Universal media downloader (Facebook, TikTok, YouTube, etc).
+*   `pinterest <query>` — Image search returning carousel results.
+*   `screenshot <url>` — Captures a live preview of a website.
+*   `dalle <prompt>` — AI image generation.
+*   `lyrics <song>` — Fetches song lyrics.
 
-`copilot`, `perplexity`, `gpt5` — other models.
+### 🛠️ Utilities
+*   `tempmail` — Generates disposable email addresses.
+*   `remind <time> <msg>` — Sets a scheduled reminder (e.g., `10m`).
+*   `translate <lang> <text>` — Translates text or audio inputs.
+*   `dict`, `google`, `wiki`, `wolfram` — Knowledge and search tools.
 
-**media**
-`alldl <url>` — universal downloader (fb, tt, yt, etc).
-
-`pinterest <query>` — search images (carousel).
-
-`screenshot <url>` — capture website preview.
-
-`lyrics <song>` — find song lyrics.
-
-`dalle <prompt>` — generate images.
-
-
-**utility**
-`tempmail` — generate disposable emails.
-
-`remind <time> <msg>` — set a reminder (e.g. 10m).
-
-`translate <lang> <text>` — translate text and audio.
-
-`dict`, `google`, `wiki`, `wolfram` — information tools.
-
-**admin**
-`stats` — check ram, uptime, and user count.
-
-`getuser` — view or sync user database.
-
-`ban`/`unban` — manage user access.
-
-`broadcast <msg>` — send announcement to all users.
-
-`maintenance on/off` — toggle bot availability.
-
-`clean` — purge old cache files.
+### 🛡️ Administration
+*   `stats` — Displays system metrics (RAM, Uptime, User Count).
+*   `getuser` — Views or synchronizes the user database.
+*   `ban` / `unban` — Manages user access permissions.
+*   `broadcast <msg>` — Sends a global announcement to all users.
+*   `maintenance on/off` — Toggles maintenance mode.
+*   `clean` — Purges temporary cache files.
 
 ---
 
-made by sethdico.
+<div align="center">
+    <br>
+    Developed with ❤️ by Sethdico
+</div>
