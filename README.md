@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="https://tenor.com/view/urabe-mikoto-nazo-no-kanojo-x-nazo-no-gif-26136961" width="600" style="border-radius: 10px; box-shadow: 0px 5px 15px rgba(0,0,0,0.3);">
+  <img src="https://media.tenor.com/D_vC5l2w8a0AAAAC/nazo-no-kanojo-x-urabe-mikoto.gif" width="600" style="border-radius: 10px; box-shadow: 0px 5px 15px rgba(0,0,0,0.3);">
 
   # AMDUSPAGE
 
