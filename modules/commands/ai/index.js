@@ -60,7 +60,7 @@ async function upload(senderId, data, token) {
 module.exports.config = {
     name: "amdus",
     author: "sethdico",
-    version: "47.3",
+    version: "47.5",
     category: "AI",
     description: "Main amdus ai. Video/image/document recognition, file generation and image edit/generation, real-time info and able to use some of the commands. ",
     adminOnly: false,
@@ -113,15 +113,34 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
         const urlRegex = /https?:\/\/[^\s)]+/gi;
         const urls = text.match(urlRegex) || [];
+        let isFileHandled = false;
+
         for (let rawUrl of urls) {
             const url = rawUrl.replace(/[).,]+$/, '');
-            if (url.includes('chipp-images')) await api.sendAttachment("image", url, uid);
-            else if (url.includes('chipp-application-files') || url.includes('app.chipp.ai/api/downloads')) await api.sendAttachment("file", url, uid);
+            if (url.includes('chipp-images')) {
+                await api.sendAttachment("image", url, uid);
+                isFileHandled = true;
+            } 
+            else if (url.includes('app.chipp.ai/api/downloads') || url.includes('chipp-application-files')) {
+                try {
+                    const downloadRes = await axios.get(url);
+                    const fileObj = downloadRes.data;
+                    if (fileObj && fileObj.fileBase64) {
+                        await upload(uid, fileObj, token);
+                        isFileHandled = true;
+                    } else if (typeof fileObj === 'string' && fileObj.startsWith('{')) {
+                        const parsed = JSON.parse(fileObj);
+                        if (parsed.fileBase64) {
+                            await upload(uid, parsed, token);
+                            isFileHandled = true;
+                        }
+                    }
+                } catch (e) { console.error("fetch error:", e.message); }
+            }
         }
 
-        let isFileSent = false;
         const jsonMatch = text.match(/\{[\s\S]*?\}/);
-        if (jsonMatch) {
+        if (jsonMatch && !isFileHandled) {
             try {
                 const act = JSON.parse(jsonMatch[0]);
                 if (act.action === "ban") {
@@ -132,9 +151,9 @@ module.exports.run = async function ({ event, args, api, reply }) {
                     userLock.delete(uid);
                     return await executeAction(act, event, api, reply);
                 }
-                if (act.fileBase64 && act.fileName) {
+                if (act.fileBase64) {
                     await upload(uid, act, token);
-                    isFileSent = true;
+                    isFileHandled = true;
                 }
             } catch (e) {}
         }
@@ -156,11 +175,8 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 .replace(/\(\)/g, "")
                 .trim();
 
-            if (cleanText) {
-                await reply(cleanText.toLowerCase());
-            } else if (!urls.length && !isFileSent && !text.includes('{')) {
-                await reply(text.toLowerCase());
-            }
+            if (cleanText) await reply(cleanText.toLowerCase());
+            else if (!urls.length && !isFileHandled && !text.includes('{')) await reply(text.toLowerCase());
         }
     } catch (err) {
         console.error(err.message);
