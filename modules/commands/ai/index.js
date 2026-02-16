@@ -41,21 +41,26 @@ async function handleTieredBan(userId, reason, reply) {
 
 async function upload(senderId, data, token) {
     try {
-        const base64Raw = data.fileBase64.includes(',') ? data.fileBase64.split(',')[1] : data.fileBase64;
-        const buffer = Buffer.from(base64Raw.replace(/\s/g, ''), 'base64');
+        const base64Data = data.fileBase64.includes(',') ? data.fileBase64.split(',')[1] : data.fileBase64;
+        const buffer = Buffer.from(base64Data.replace(/\s/g, ''), 'base64');
         if (buffer.length > MAX_SIZE) return;
+
+        const mimeMatch = data.fileBase64.match(/^data:(.*?);base64,/);
+        const mime = mimeMatch ? mimeMatch[1] : 'text/plain';
+
         const form = new FormData();
         form.append('recipient', JSON.stringify({ id: senderId }));
-        form.append('message', JSON.stringify({ attachment: { type: 'file', payload: { is_reusable: true } } }));
-        form.append('filedata', buffer, { filename: data.fileName || 'document.txt' });
+        form.append('message', JSON.stringify({ attachment: { type: mime.startsWith('image/') ? 'image' : 'file', payload: { is_reusable: true } } }));
+        form.append('filedata', buffer, { filename: data.fileName || 'document.txt', contentType: mime });
+
         await axios.post(`https://graph.facebook.com/v21.0/me/messages?access_token=${token}`, form, { headers: form.getHeaders() });
-    } catch (e) { console.error(e.message); }
+    } catch (e) { console.error("upload failed:", e.message); }
 }
 
 module.exports.config = {
     name: "amdus",
     author: "sethdico",
-    version: "46.8",
+    version: "47.3",
     category: "AI",
     description: "Main amdus ai. Video/image/document recognition, file generation and image edit/generation, real-time info and able to use some of the commands. ",
     adminOnly: false,
@@ -72,9 +77,11 @@ module.exports.run = async function ({ event, args, api, reply }) {
     if (mid) processedMids.add(mid);
     lastRequests.set(uid, Date.now());
     userLock.add(uid);
+
     const query = args.join(" ").trim();
     const token = global.PAGE_ACCESS_TOKEN;
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
+
     try {
         const atts = [...(event.message?.reply_to?.attachments || []), ...(event.message?.attachments || [])];
         let ctx = [];
@@ -89,17 +96,21 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 ctx.push(`[${type}_url]: ${f.payload.url}`);
             }
         }
+
         if (ctx.length > 0 && !query) {
             userLock.delete(uid);
             if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
-            return reply("media received. reply to the image/video/doc/docx with your question.");
+            return reply("media received. reply with your question.");
         }
+
         const session = getSession(uid);
         const res = await askChipp(ctx.length ? `${ctx.join("\n")}\n\nuser_query: ${query}` : query, null, session);
         if (!res || res.error) { userLock.delete(uid); return reply("api offline."); }
         if (res.data?.chatSessionId) saveSession(uid, res.data.chatSessionId);
+
         const text = parseAI(res);
         if (!text) { userLock.delete(uid); return reply("no response."); }
+
         const urlRegex = /https?:\/\/[^\s)]+/gi;
         const urls = text.match(urlRegex) || [];
         for (let rawUrl of urls) {
@@ -107,15 +118,27 @@ module.exports.run = async function ({ event, args, api, reply }) {
             if (url.includes('chipp-images')) await api.sendAttachment("image", url, uid);
             else if (url.includes('chipp-application-files') || url.includes('app.chipp.ai/api/downloads')) await api.sendAttachment("file", url, uid);
         }
+
+        let isFileSent = false;
         const jsonMatch = text.match(/\{[\s\S]*?\}/);
         if (jsonMatch) {
             try {
                 const act = JSON.parse(jsonMatch[0]);
-                if (act.action === "ban") { userLock.delete(uid); return await handleTieredBan(uid, act.reason || "violation", reply); }
-                if (act.tool) { userLock.delete(uid); return await executeAction(act, event, api, reply); }
-                if (act.fileBase64) await upload(uid, act, token);
+                if (act.action === "ban") {
+                    userLock.delete(uid);
+                    return await handleTieredBan(uid, act.reason || "violation", reply);
+                }
+                if (act.tool) {
+                    userLock.delete(uid);
+                    return await executeAction(act, event, api, reply);
+                }
+                if (act.fileBase64 && act.fileName) {
+                    await upload(uid, act, token);
+                    isFileSent = true;
+                }
             } catch (e) {}
         }
+
         const math = text.match(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g);
         if (math) {
             const cleanMathText = text.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g, "").trim();
@@ -132,8 +155,12 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 .replace(/\{[\s\S]*?\}/g, "")
                 .replace(/\(\)/g, "")
                 .trim();
-            if (cleanText) await reply(cleanText.toLowerCase());
-            else if (urls.length === 0 && !text.includes('{')) await reply(text.toLowerCase());
+
+            if (cleanText) {
+                await reply(cleanText.toLowerCase());
+            } else if (!urls.length && !isFileSent && !text.includes('{')) {
+                await reply(text.toLowerCase());
+            }
         }
     } catch (err) {
         console.error(err.message);
