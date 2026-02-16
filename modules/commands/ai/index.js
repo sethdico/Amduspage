@@ -44,15 +44,12 @@ async function upload(senderId, data, token) {
         const base64Data = data.fileBase64.includes(',') ? data.fileBase64.split(',')[1] : data.fileBase64;
         const buffer = Buffer.from(base64Data.replace(/\s/g, ''), 'base64');
         if (buffer.length > MAX_SIZE) return;
-
         const mimeMatch = data.fileBase64.match(/^data:(.*?);base64,/);
         const mime = mimeMatch ? mimeMatch[1] : 'text/plain';
-
         const form = new FormData();
         form.append('recipient', JSON.stringify({ id: senderId }));
         form.append('message', JSON.stringify({ attachment: { type: mime.startsWith('image/') ? 'image' : 'file', payload: { is_reusable: true } } }));
         form.append('filedata', buffer, { filename: data.fileName || 'document.txt', contentType: mime });
-
         await axios.post(`https://graph.facebook.com/v21.0/me/messages?access_token=${token}`, form, { headers: form.getHeaders() });
     } catch (e) { console.error("upload failed:", e.message); }
 }
@@ -60,7 +57,7 @@ async function upload(senderId, data, token) {
 module.exports.config = {
     name: "amdus",
     author: "sethdico",
-    version: "47.5",
+    version: "47.6",
     category: "AI",
     description: "Main amdus ai. Video/image/document recognition, file generation and image edit/generation, real-time info and able to use some of the commands. ",
     adminOnly: false,
@@ -77,7 +74,6 @@ module.exports.run = async function ({ event, args, api, reply }) {
     if (mid) processedMids.add(mid);
     lastRequests.set(uid, Date.now());
     userLock.add(uid);
-
     const query = args.join(" ").trim();
     const token = global.PAGE_ACCESS_TOKEN;
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
@@ -100,67 +96,72 @@ module.exports.run = async function ({ event, args, api, reply }) {
         if (ctx.length > 0 && !query) {
             userLock.delete(uid);
             if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
-            return reply("media received. reply with your question.");
+            return reply("media received. reply on the Video/Images/Documents with your question.");
         }
 
         const session = getSession(uid);
         const res = await askChipp(ctx.length ? `${ctx.join("\n")}\n\nuser_query: ${query}` : query, null, session);
-        if (!res || res.error) { userLock.delete(uid); return reply("api offline."); }
+        if (!res || res.error) { userLock.delete(uid); return reply("api unavailable. please rewrite your query and retry."); }
         if (res.data?.chatSessionId) saveSession(uid, res.data.chatSessionId);
 
-        const text = parseAI(res);
+        let text = parseAI(res);
         if (!text) { userLock.delete(uid); return reply("no response."); }
 
+        const mdLinkRegex = /\[(.*?)\]\((https?:\/\/.*?)\)/gi;
         const urlRegex = /https?:\/\/[^\s)]+/gi;
-        const urls = text.match(urlRegex) || [];
-        let isFileHandled = false;
+        let fileHandled = false;
 
-        for (let rawUrl of urls) {
-            const url = rawUrl.replace(/[).,]+$/, '');
-            if (url.includes('chipp-images')) {
-                await api.sendAttachment("image", url, uid);
-                isFileHandled = true;
-            } 
-            else if (url.includes('app.chipp.ai/api/downloads') || url.includes('chipp-application-files')) {
-                try {
-                    const downloadRes = await axios.get(url);
-                    const fileObj = downloadRes.data;
-                    if (fileObj && fileObj.fileBase64) {
-                        await upload(uid, fileObj, token);
-                        isFileHandled = true;
-                    } else if (typeof fileObj === 'string' && fileObj.startsWith('{')) {
-                        const parsed = JSON.parse(fileObj);
-                        if (parsed.fileBase64) {
-                            await upload(uid, parsed, token);
-                            isFileHandled = true;
-                        }
-                    }
-                } catch (e) { console.error("fetch error:", e.message); }
+        let match;
+        const mdLinks = [];
+        while ((match = mdLinkRegex.exec(text)) !== null) {
+            mdLinks.push({ full: match[0], title: match[1], url: match[2].replace(/[).,]+$/, '') });
+        }
+
+        for (const item of mdLinks) {
+            const isChipp = item.url.includes('chipp-images') || item.url.includes('chipp-application-files') || item.url.includes('app.chipp.ai/api/downloads');
+            
+            if (isChipp) {
+                if (item.url.includes('chipp-images')) {
+                    await api.sendAttachment("image", item.url, uid);
+                } else {
+                    await api.sendAttachment("file", item.url, uid);
+                }
+                text = text.replace(item.full, "");
+                fileHandled = true;
+            } else {
+                text = text.replace(item.full, `${item.title}: ${item.url}`);
+            }
+        }
+
+        const remainingUrls = text.match(urlRegex) || [];
+        for (const url of remainingUrls) {
+            const cleanUrl = url.replace(/[).,]+$/, '');
+            const isChipp = cleanUrl.includes('chipp-images') || cleanUrl.includes('chipp-application-files') || cleanUrl.includes('app.chipp.ai/api/downloads');
+            
+            if (isChipp) {
+                if (cleanUrl.includes('chipp-images')) {
+                    await api.sendAttachment("image", cleanUrl, uid);
+                } else {
+                    await api.sendAttachment("file", cleanUrl, uid);
+                }
+                text = text.replace(url, "");
+                fileHandled = true;
             }
         }
 
         const jsonMatch = text.match(/\{[\s\S]*?\}/);
-        if (jsonMatch && !isFileHandled) {
+        if (jsonMatch) {
             try {
                 const act = JSON.parse(jsonMatch[0]);
-                if (act.action === "ban") {
-                    userLock.delete(uid);
-                    return await handleTieredBan(uid, act.reason || "violation", reply);
-                }
-                if (act.tool) {
-                    userLock.delete(uid);
-                    return await executeAction(act, event, api, reply);
-                }
-                if (act.fileBase64) {
-                    await upload(uid, act, token);
-                    isFileHandled = true;
-                }
+                if (act.action === "ban") { userLock.delete(uid); return await handleTieredBan(uid, act.reason || "violation", reply); }
+                if (act.tool) { userLock.delete(uid); return await executeAction(act, event, api, reply); }
+                if (act.fileBase64) { await upload(uid, act, token); fileHandled = true; }
             } catch (e) {}
         }
 
         const math = text.match(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g);
         if (math) {
-            const cleanMathText = text.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g, "").trim();
+            const cleanMathText = text.replace(/(\$\$[\s\S]*?\approx\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g, "").trim();
             if (cleanMathText) await reply(cleanMathText.toLowerCase());
             for (const m of math) {
                 const raw = m.replace(/\$\$|\\\[|\\\]|\\\(|\\\)/g, "").trim();
@@ -168,15 +169,17 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 await api.sendAttachment("image", mathUrl, uid);
             }
         } else {
-            let cleanText = text
-                .replace(/\[.*?\]\(https?:\/\/.*?\)/g, "")
-                .replace(urlRegex, "")
+            let finalOutput = text
                 .replace(/\{[\s\S]*?\}/g, "")
-                .replace(/\(\)/g, "")
+                .replace(/\s\s+/g, " ")
+                .replace(/\(\s*\)/g, "")
                 .trim();
 
-            if (cleanText) await reply(cleanText.toLowerCase());
-            else if (!urls.length && !isFileHandled && !text.includes('{')) await reply(text.toLowerCase());
+            if (finalOutput) {
+                await reply(finalOutput.toLowerCase());
+            } else if (!fileHandled && !text.includes('{')) {
+                await reply(text.toLowerCase());
+            }
         }
     } catch (err) {
         console.error(err.message);
