@@ -36,7 +36,7 @@ async function handleTieredBan(userId, reason, reply) {
     await db.addBan(userId, reason, level, config);
     global.BANNED_USERS.add(userId);
     const durationText = config ? `for ${level === 1 ? "3h" : "3d"}` : "permanently";
-    reply(`ðŸš« security: banned ${durationText}.\nreason: ${reason}`);
+    reply(`Ã°Å¸Å¡Â« security: banned ${durationText}.\nreason: ${reason}`);
 }
 
 async function upload(senderId, data, token) {
@@ -159,10 +159,10 @@ module.exports.run = async function ({ event, args, api, reply }) {
             } catch (e) {}
         }
 
-        const math = text.match(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g);
+        const math = text.match(/(\$\$[\s\S]*?\approx\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\$)\$[^\$\n]+(?<!\$)\$)/g);
         if (math) {
-            const cleanMathText = text.replace(/(\$\$[\s\S]*?\approx\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g, "").trim();
-            if (cleanMathText) await reply(cleanMathText.toLowerCase());
+            const cleanMathText = text.replace(/(\$\$[\s\S]*?\approx\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\$)\$[^\$\n]+(?<!\$)\$)/g, "").trim();
+            if (cleanMathText) await reply(cleanMathText);
             for (const m of math) {
                 const raw = m.replace(/\$\$|\\\[|\\\]|\\\(|\\\)/g, "").trim();
                 const mathUrl = `https://latex.codecogs.com/png.image?%5Cdpi%7B200%7D%20%5Cbg_white%20${encodeURIComponent(raw)}`;
@@ -171,14 +171,14 @@ module.exports.run = async function ({ event, args, api, reply }) {
         } else {
             let finalOutput = text
                 .replace(/\{[\s\S]*?\}/g, "")
-                .replace(/\s\s+/g, " ")
+                .replace(/[ ]{2,}/g, " ")
                 .replace(/\(\s*\)/g, "")
                 .trim();
 
             if (finalOutput) {
-                await reply(finalOutput.toLowerCase());
+                await reply(finalOutput);
             } else if (!fileHandled && !text.includes('{')) {
-                await reply(text.toLowerCase());
+                await reply(text);
             }
         }
     } catch (err) {
