@@ -3,9 +3,9 @@ const axios = require("axios");
 module.exports.config = {
     name: "morphic",
     author: "sethdico",
-    version: "2.6",
+    version: "2.8",
     category: "AI",
-    description: "Morphic AI(webscrape).",
+    description: "Search AI via Morphic.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -47,7 +47,8 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 "referer": "https://chat.morphic.sh/",
                 "user-agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Mobile Safari/537.36",
                 "cookie": cookie
-            }
+            },
+            timeout: 60000
         });
 
         let fullText = "";
@@ -79,13 +80,17 @@ module.exports.run = async function ({ event, args, api, reply }) {
             if (!fullText) return reply("Morphic returned an empty response.");
 
             const cleanResponse = fullText.replace(/\[\d+\]\(#.*?\)/g, '');
-            reply(`ðŸŒ **MORPHIC SEARCH**\nâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€\n${cleanResponse.trim()}`);
+            reply(`🌐 **MORPHIC SEARCH**\n────────────────\n${cleanResponse.trim()}`);
         });
 
-        response.data.on('error', (err) => { throw err; });
+        response.data.on('error', (err) => { 
+            console.error(err);
+            throw err; 
+        });
 
     } catch (error) {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
-        reply("Request failed. Check logs for details.");
+        console.error(error.message);
+        reply("Request failed. Site protection may be active or cookie expired.");
     }
 };
