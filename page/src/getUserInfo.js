@@ -1,37 +1,48 @@
 const axios = require("axios");
-const crypto = require("crypto");
 
 module.exports = function (event) {
   return async function getUserInfo(id) {
     const psid = id || event.sender.id;
     const token = global.PAGE_ACCESS_TOKEN;
-    const secret = process.env.JTOOL_SECRET;
 
     try {
-      const graph = await axios.get(`https://graph.facebook.com/${psid}?fields=profile_pic&access_token=${token}`);
-      const picUrl = graph.data?.profile_pic;
-      if (!picUrl || picUrl.includes("fbsbx.com")) return { name: "messenger user", pic: picUrl };
+      const response = await axios.get(
+        `https://graph.facebook.com/v21.0/me/conversations`, {
+          params: {
+            user_id: psid,
+            fields: 'participants',
+            access_token: token
+          }
+        }
+      );
 
-      const uidMatch = picUrl.match(/(\d+)_/);
-      const realUid = uidMatch ? uidMatch[1] : null;
+      const thread = response.data?.data?.[0];
+      const participants = thread?.participants?.data;
 
-      if (realUid && secret) {
-        const payload = { link: realUid, type: 'basic' };
-        const timestamp = Date.now().toString();
-        const signature = crypto.createHmac('sha256', secret).update(JSON.stringify(payload)).digest('hex');
-
-        const stalk = await axios.post('https://jrmtool-api.vercel.app/api/fb-stalk', payload, {
-          headers: { 'Content-Type': 'application/json', 'X-Api-Timestamp': timestamp, 'X-Api-Signature': signature },
-          timeout: 5000
-        });
-
-        if (stalk.data?.name) {
-          return { name: stalk.data.name.toLowerCase(), pic: picUrl };
+      if (participants) {
+        const user = participants.find(p => p.id === psid);
+        if (user && user.name) {
+          return {
+            name: user.name.toLowerCase(),
+            first_name: user.name.split(' ')[0],
+            last_name: user.name.split(' ').slice(1).join(' ') || "",
+            id: psid
+          };
         }
       }
-      return { name: "messenger user", pic: picUrl };
+
+      const direct = await axios.get(`https://graph.facebook.com/v21.0/${psid}?fields=name&access_token=${token}`);
+      if (direct.data && direct.data.name) {
+        return {
+          name: direct.data.name.toLowerCase(),
+          first_name: direct.data.name.split(' ')[0],
+          id: psid
+        };
+      }
+
+      return { name: "messenger user", id: psid };
     } catch (e) {
-      return { name: "messenger user", pic: null };
+      return { name: "messenger user", id: psid };
     }
   };
 };
