@@ -21,10 +21,9 @@ const LANG_MAP = {
 
 module.exports.config = {
   name: "trans",
-  author: "Sethdico",
-  version: "4.0",
+  author: "sethdico",
+  version: "4.1",
   category: "Utility",
-  description: "translate text",
   adminOnly: false,
   usePrefix: false,
   cooldown: 2,
@@ -32,7 +31,10 @@ module.exports.config = {
 
 module.exports.run = async ({ event, args, api }) => {
   const id = event.sender.id;
-  if (!args.length) return api.sendMessage("usage: trans [lang] [text]", id);
+  
+  if (!args.length) {
+      return api.sendMessage("🌍 **translator**\n━━━━━━━━━━━━━━━━\nhow to use:\n  trans <text>\n  trans to <lang> <text>\n\nexamples:\n  trans to ja good morning\n  trans to es how are you\n\nnote: defaults to english or tagalog if no language is set.", id);
+  }
 
   let targetLang = "en";
   let text = "";
@@ -49,7 +51,7 @@ module.exports.run = async ({ event, args, api }) => {
       text = args.join(" ");
   }
 
-  if (!text) return api.sendMessage("provide text to translate", id);
+  if (!text) return api.sendMessage("provide text to translate.", id);
   if (api.sendTypingIndicator) api.sendTypingIndicator(true, id).catch(()=>{});
 
   try {
@@ -66,12 +68,12 @@ module.exports.run = async ({ event, args, api }) => {
         translated = res.data[0].map(x => x[0]).join("");
     }
 
-    await api.sendMessage(`${detected} -> ${targetLang}\n\n${translated}`, id);
+    await api.sendMessage(`${detected} ➔ ${targetLang}\n\n${translated}`.toLowerCase(), id);
 
     const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(translated)}&tl=${targetLang}&client=tw-ob`;
     api.sendAttachment("audio", audioUrl, id).catch(()=>{});
 
   } catch (e) {
-    api.sendMessage("translation failed", id);
+    api.sendMessage("translation failed.", id);
   }
 };
