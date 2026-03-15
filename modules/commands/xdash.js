@@ -3,57 +3,53 @@ const { http } = require("../utils");
 module.exports.config = {
     name: "xdash",
     author: "sethdico",
-    version: "1.0",
     category: "AI",
-    description: "Search the web with Xdash AI",
+    description: "web search with ai.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
 };
 
 module.exports.run = async function ({ event, args, api, reply }) {
-    const query = args.join(" ");
     const senderID = event.sender.id;
+    const query = args.join(" ");
 
     if (!query) {
-        return reply("What would you like me to look up for you?");
+        return reply("🔎 **xdash**\n━━━━━━━━━━━━━━━━\nhow to use:\n  xdash <query>\n\nexample:\n  xdash best anime 2026");
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
 
     try {
-        const response = await http.get("https://haji-mix-api.gleeze.com/api/xdash", {
+        const res = await http.get("https://haji-mix-api.gleeze.com/api/xdash", {
             params: { ask: query, stream: false }
         });
 
-        const data = response.data.answer;
+        const data = res.data.answer;
+        if (!data || !data.llm_response) return reply("couldn't find anything.");
 
-        if (!data || !data.llm_response) {
-            return reply("I couldn't find any specific information on that. Maybe try rephrasing?");
-        }
-
-        const cleanResponse = data.llm_response
+        const clean = data.llm_response
             .replace(/【citation:\d+】/g, "")
             .replace(/```mermaid[\s\S]*?```/g, "")
             .replace(/---\n\n### Timeline \(Mermaid\)/g, "")
             .replace(/\n---\n\n\*\*Assumptions\*\*[\s\S]*?$/g, "")
             .trim();
 
-        await api.sendMessage(`🔎 **Searching...**\n\n${cleanResponse}`, senderID);
+        await api.sendMessage(`🔎 **xdash**\n\n${clean}`.toLowerCase(), senderID);
 
-        if (data.results && data.results.length > 0) {
+        if (data.results?.length > 0) {
             const sources = data.results.slice(0, 6).map(item => ({
-                title: item.name.length > 80 ? item.name.substring(0, 77) + "..." : item.name,
-                subtitle: item.snippet.length > 80 ? item.snippet.substring(0, 77) + "..." : item.snippet,
+                title: item.name.substring(0, 80),
+                subtitle: item.snippet.substring(0, 80),
                 image_url: "https://files.catbox.moe/5688j6.png",
-                buttons: [{ type: "web_url", url: item.url, title: "Read Source" }]
+                buttons: [{ type: "web_url", url: item.url, title: "view source" }]
             }));
             
             await api.sendCarousel(sources, senderID);
         }
 
-    } catch (error) {
-        reply("I'm having a little trouble connecting to my search tools right now. Can you try again in a moment?");
+    } catch (e) {
+        reply("search tools are down.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
     }
