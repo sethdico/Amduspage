@@ -2,10 +2,9 @@ const axios = require("axios");
 
 module.exports.config = {
     name: "dalle",
-    author: "Sethdico",
-    version: "1.0",
+    author: "sethdico",
     category: "Media",
-    description: "Generate images using OpenDalle",
+    description: "generate images from text.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 10,
@@ -15,27 +14,29 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const prompt = args.join(" ");
     const uid = event.sender.id;
 
-    if (!prompt) return reply("draw what?");
+    if (!prompt) {
+        return reply("🎨 **dalle generator**\n━━━━━━━━━━━━━━━━\nhow to use:\n  dalle <prompt>\n\nexample:\n  dalle cyberpunk cat");
+    }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
 
     try {
-        reply("generating...");
+        reply("generating... this might take a sec.");
 
         const res = await axios.get("https://api-library-kohi.onrender.com/api/opendalle", {
             params: { prompt: prompt }
         });
 
-        const imageUrl = res.data.data || res.data.url || res.data;
+        const image = res.data.data || res.data.url || res.data;
 
-        if (imageUrl) {
-            await api.sendAttachment("image", imageUrl, uid);
+        if (image) {
+            await api.sendAttachment("image", image, uid);
         } else {
-            reply("got nothing back.");
+            reply("failed to generate. try a different prompt.");
         }
 
     } catch (e) {
-        reply("failed to generate.");
+        reply("api is sleeping or having issues.");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }
