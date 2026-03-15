@@ -33,6 +33,11 @@ const Reminder = mongoose.model('Reminder', ReminderSchema);
 const Stat = mongoose.model('Stat', new mongoose.Schema({ command: String, count: { type: Number, default: 0 } }));
 const UserStat = mongoose.model('UserStat', UserStatsSchema);
 
+setInterval(async () => {
+    const oneMonthAgo = new Date(Date.now() - 30 * 86400000);
+    await UserStat.deleteMany({ lastActive: { $lt: oneMonthAgo } });
+}, 86400000);
+
 const buffer = new Map();
 setInterval(async () => {
     if (buffer.size === 0) return;
