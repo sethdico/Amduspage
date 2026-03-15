@@ -10,11 +10,15 @@ module.exports.config = {
     cooldown: 5,
 };
 
-module.exports.run = async function ({ args, api, reply }) {
+module.exports.run = async function ({ event, args, api, reply }) {
+    const senderID = event.sender.id;
     const query = args.join(" ");
-    if (!query) return reply("google what?");
 
-    if (api.sendTypingIndicator) api.sendTypingIndicator(true, event.sender.id);
+    if (!query) {
+        return reply("🔎 **google search**\n━━━━━━━━━━━━━━━━\nhow to use:\n  google <search term>\n\nexample:\n  google how to bake a cake");
+    }
+
+    if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
 
     try {
         const url = `https://www.googleapis.com/customsearch/v1?key=${process.env.GOOGLE_API_KEY}&cx=${process.env.GOOGLE_CX}&q=${encodeURIComponent(query)}`;
@@ -30,10 +34,10 @@ module.exports.run = async function ({ args, api, reply }) {
             buttons: [{ type: "web_url", url: item.link, title: "visit" }]
         }));
 
-        await api.sendCarousel(elements, event.sender.id);
+        await api.sendCarousel(elements, senderID);
     } catch (e) {
-        reply("google is acting up.");
+        reply("google is acting up right now.");
     } finally {
-        if (api.sendTypingIndicator) api.sendTypingIndicator(false, event.sender.id);
+        if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
     }
 };
