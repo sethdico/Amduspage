@@ -36,7 +36,7 @@ async function handleTieredBan(userId, reason, reply) {
     await db.addBan(userId, reason, level, config);
     global.BANNED_USERS.add(userId);
     const durationText = config ? `for ${level === 1 ? "3h" : "3d"}` : "permanently";
-    reply(`Ã°Å¸Å¡Â« security: banned ${durationText}.\nreason: ${reason}`);
+    reply(`🚫 security: banned ${durationText}.\nreason: ${reason}`);
 }
 
 async function upload(senderId, data, token) {
@@ -57,9 +57,9 @@ async function upload(senderId, data, token) {
 module.exports.config = {
     name: "amdus",
     author: "sethdico",
-    version: "47.6",
+    version: "47.7",
     category: "AI",
-    description: "Main amdus ai. Video/image/document recognition, file generation and image edit/generation, real-time info and able to use some of the commands. ",
+    description: "Main amdus ai assistant.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 0,
@@ -68,12 +68,14 @@ module.exports.config = {
 module.exports.run = async function ({ event, args, api, reply }) {
     const uid = String(event.sender.id);
     const mid = event.message?.mid;
+    
     if ((mid && processedMids.has(mid)) || userLock.has(uid)) return;
     const last = lastRequests.get(uid) || 0;
     if (Date.now() - last < COOLDOWN_MS && !global.ADMINS.has(uid)) return;
     if (mid) processedMids.add(mid);
     lastRequests.set(uid, Date.now());
     userLock.add(uid);
+    
     const query = args.join(" ").trim();
     const token = global.PAGE_ACCESS_TOKEN;
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
@@ -82,13 +84,14 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const atts = [...(event.message?.reply_to?.attachments || []), ...(event.message?.attachments || [])];
         let ctx = [];
         const seen = new Set();
+        
         for (const f of atts) {
             const url = f.payload.url;
             if (seen.has(url)) continue;
             seen.add(url);
             const ext = path.extname(url.split('?')[0]).toLowerCase();
             const type = f.type === "image" ? "image" : (f.type === "video" ? "video" : "document");
-            if (f.type !== "file" || ['.txt', '.js', '.json', '.md', '.py', '.docx', '.doc', '.pdf'].includes(ext)) {
+            if (f.type !== "file" || ['.txt', '.js', '.json', '.md', '.py', '.docx', '.doc', '.pdf', '.pptx', '.ppt'].includes(ext)) {
                 ctx.push(`[${type}_url]: ${f.payload.url}`);
             }
         }
@@ -96,12 +99,17 @@ module.exports.run = async function ({ event, args, api, reply }) {
         if (ctx.length > 0 && !query) {
             userLock.delete(uid);
             if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
-            return reply("media received. reply on the Video/Images/Documents with your question.");
+            return reply("🧠 **amdus ai**\n\ni can analyze photos, short videos, and docs. just send the file or reply to it with your question.\n\ni also handle web search, image gen, and real-time data. you don't even need to type 'amdus' to talk to me—just send a message.");
         }
 
         const session = getSession(uid);
         const res = await askChipp(ctx.length ? `${ctx.join("\n")}\n\nuser_query: ${query}` : query, null, session);
-        if (!res || res.error) { userLock.delete(uid); return reply("api unavailable. please rewrite your query and retry."); }
+        
+        if (!res || res.error) { 
+            userLock.delete(uid); 
+            return reply("api's busy. try again in a sec."); 
+        }
+        
         if (res.data?.chatSessionId) saveSession(uid, res.data.chatSessionId);
 
         let text = parseAI(res);
@@ -119,13 +127,9 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
         for (const item of mdLinks) {
             const isChipp = item.url.includes('chipp-images') || item.url.includes('chipp-application-files') || item.url.includes('app.chipp.ai/api/downloads');
-            
             if (isChipp) {
-                if (item.url.includes('chipp-images')) {
-                    await api.sendAttachment("image", item.url, uid);
-                } else {
-                    await api.sendAttachment("file", item.url, uid);
-                }
+                if (item.url.includes('chipp-images')) await api.sendAttachment("image", item.url, uid);
+                else await api.sendAttachment("file", item.url, uid);
                 text = text.replace(item.full, "");
                 fileHandled = true;
             } else {
@@ -137,13 +141,9 @@ module.exports.run = async function ({ event, args, api, reply }) {
         for (const url of remainingUrls) {
             const cleanUrl = url.replace(/[).,]+$/, '');
             const isChipp = cleanUrl.includes('chipp-images') || cleanUrl.includes('chipp-application-files') || cleanUrl.includes('app.chipp.ai/api/downloads');
-            
             if (isChipp) {
-                if (cleanUrl.includes('chipp-images')) {
-                    await api.sendAttachment("image", cleanUrl, uid);
-                } else {
-                    await api.sendAttachment("file", cleanUrl, uid);
-                }
+                if (cleanUrl.includes('chipp-images')) await api.sendAttachment("image", cleanUrl, uid);
+                else await api.sendAttachment("file", cleanUrl, uid);
                 text = text.replace(url, "");
                 fileHandled = true;
             }
@@ -162,24 +162,16 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const math = text.match(/(\$\$[\s\S]*?\approx\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\$)\$[^\$\n]+(?<!\$)\$)/g);
         if (math) {
             const cleanMathText = text.replace(/(\$\$[\s\S]*?\approx\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\$)\$[^\$\n]+(?<!\$)\$)/g, "").trim();
-            if (cleanMathText) await reply(cleanMathText);
+            if (cleanMathText) await reply(cleanMathText.toLowerCase());
             for (const m of math) {
                 const raw = m.replace(/\$\$|\\\[|\\\]|\\\(|\\\)/g, "").trim();
                 const mathUrl = `https://latex.codecogs.com/png.image?%5Cdpi%7B200%7D%20%5Cbg_white%20${encodeURIComponent(raw)}`;
                 await api.sendAttachment("image", mathUrl, uid);
             }
         } else {
-            let finalOutput = text
-                .replace(/\{[\s\S]*?\}/g, "")
-                .replace(/[ ]{2,}/g, " ")
-                .replace(/\(\s*\)/g, "")
-                .trim();
-
-            if (finalOutput) {
-                await reply(finalOutput);
-            } else if (!fileHandled && !text.includes('{')) {
-                await reply(text);
-            }
+            let finalOutput = text.replace(/\{[\s\S]*?\}/g, "").replace(/[ ]{2,}/g, " ").trim();
+            if (finalOutput) await reply(finalOutput.toLowerCase());
+            else if (!fileHandled && !text.includes('{')) await reply(text.toLowerCase());
         }
     } catch (err) {
         console.error(err.message);
