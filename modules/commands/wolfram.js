@@ -2,21 +2,23 @@ const { http } = require("../utils");
 
 module.exports.config = {
     name: "wolfram", 
-    author: "Sethdico", 
-    version: "9.2", 
+    author: "sethdico", 
     category: "Utility", 
-    description: "wolfram alpha search", 
+    description: "computational knowledge search", 
     adminOnly: false, 
     usePrefix: false, 
     cooldown: 5,
 };
 
 module.exports.run = async function ({ event, args, api, reply }) {
-    const input = args.join(" ");
     const id = event.sender.id;
+    const input = args.join(" ");
     
-    if (!input) return reply("usage: wolfram <query>");
-    if (api.sendTypingIndicator) api.sendTypingIndicator(true, id).catch(()=>{});
+    if (!input) {
+        return reply("🧮 **wolfram alpha**\n━━━━━━━━━━━━━━━━\nhow to use:\n  wolfram <query>\n\nexample:\n  wolfram derivative of x^2");
+    }
+
+    if (api.sendTypingIndicator) api.sendTypingIndicator(true, id);
 
     try {
         const res = await http.get(`https://api.wolframalpha.com/v2/query`, {
@@ -31,43 +33,25 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
         const data = res.data.queryresult;
         
-        if (!data.success || data.error) return reply("wolfram found nothing");
+        if (!data.success || data.error) return reply("wolfram couldn't calculate that.");
 
-        let msg = "";
-        let images = [];
+        const output = data.pods.map(pod => {
+            const text = pod.subpods.map(s => s.plaintext).filter(Boolean).join("\n");
+            return text ? `📌 **${pod.title}**\n${text}` : "";
+        }).filter(Boolean).join("\n\n");
 
-        if (data.pods) {
-            data.pods.forEach(pod => {
-                let podContent = "";
-                
-                pod.subpods?.forEach(sub => {
-                    if (sub.plaintext) {
-                        podContent += sub.plaintext + "\n";
-                    }
-                    if (sub.img?.src && sub.img.height > 20) {
-                        images.push(sub.img.src);
-                    }
-                });
+        if (!output) return reply("no clear results found.");
 
-                if (podContent.trim()) {
-                    msg += `ðŸ“ **${pod.title}**\n${podContent.trim()}\n\n`;
-                }
-            });
-        }
+        await api.sendMessage(output.toLowerCase(), id);
 
-        if (!msg) return reply("no clear text results found");
-
-        await api.sendMessage(msg.trim(), id);
-
-        const imgsToSend = images.filter(img => !img.includes("d=1")).slice(0, 3);
-        
-        for (const img of imgsToSend) {
-            await api.sendAttachment("image", img, id).catch(()=>{});
+        const images = data.pods.flatMap(p => p.subpods).map(s => s.img?.src).filter(Boolean);
+        for (const img of images.slice(0, 3)) {
+            await api.sendAttachment("image", img, id).catch(() => {});
         }
 
     } catch (e) {
-        reply("wolfram unavailable");
+        reply("wolfram service is offline.");
     } finally {
-        if (api.sendTypingIndicator) api.sendTypingIndicator(false, id).catch(()=>{});
+        if (api.sendTypingIndicator) api.sendTypingIndicator(false, id);
     }
 };
