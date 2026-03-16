@@ -99,7 +99,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         if (ctx.length > 0 && !query) {
             userLock.delete(uid);
             if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
-            return reply("🧠 **amdus ai**\n\ni can analyze photos, short videos, and docs. just send the file and reply to it with your question.\n\ni also handle web search, image gen, and real-time data. you don't need to type 'amdus' to use me—just send a direct message.");
+            return reply("🧠 **amdus ai**\n\ni can analyze photos, short videos, and docs. just send the file and reply to it with your question.\n\ni also handle web search, image gen, and real-time data. you don't need to type 'amdus' to use me and just send a direct message.");
         }
 
         const session = getSession(uid);
