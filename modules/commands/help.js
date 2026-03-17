@@ -43,6 +43,6 @@ module.exports.run = async ({ event, args, reply }) => {
       }
   });
   
-  msg += `type 'help <command>' for info.`;
+  msg += `type 'help <command>'for info or type '<command>' for tutorial guide on usage.`;
   return reply(msg.toLowerCase());
 };
