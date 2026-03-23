@@ -1,5 +1,6 @@
 const path = require("path");
 const axios = require('axios');
+const fs = require('fs');
 const FormData = require('form-data');
 const db = require("../../core/database");
 const { askChipp } = require("./handlers");
@@ -21,11 +22,11 @@ async function executeAction(action, event, api, reply) {
     if (!command) return;
     if (cmdName === "remind") return await command.run({ event, args: [action.time, action.msg], api, reply });
     if (cmdName === "pinterest") {
-        try { await command.run({ event, args:[action.query, (action.count || 5).toString()], api, reply }); } 
+        try { await command.run({ event, args: [action.query, (action.count || 5).toString()], api, reply }); } 
         catch (e) { const gmage = global.client.commands.get("gmage"); if (gmage) await gmage.run({ event, args: [action.query], api, reply }); }
         return;
     }
-    try { await command.run({ event, args: [action.query], api, reply }); } catch (e) { console.error(e.message); }
+    try { await command.run({ event, args: [action.query], api, reply }); } catch (e) {}
 }
 
 async function handleTieredBan(userId, reason, reply) {
@@ -58,7 +59,7 @@ module.exports.config = {
     name: "amdus",
     author: "sethdico",
     category: "AI",
-    description: "main amdus ai assistant.",
+    description: "Main amdus ai assistant.",
     adminOnly: false,
     usePrefix: false,
     cooldown: 0,
@@ -80,7 +81,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const token = global.PAGE_ACCESS_TOKEN;
 
     const atts = [...(event.message?.reply_to?.attachments || []), ...(event.message?.attachments || [])];
-    let ctx =[];
+    let ctx = [];
     const seen = new Set();
     
     for (const f of atts) {
@@ -89,7 +90,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         seen.add(url);
         const ext = path.extname(url.split('?')[0]).toLowerCase();
         const type = f.type === "image" ? "image" : (f.type === "video" ? "video" : "document");
-        if (f.type !== "file" ||['.txt', '.js', '.json', '.md', '.py', '.docx', '.doc', '.pdf', '.pptx', '.ppt'].includes(ext)) {
+        if (f.type !== "file" || ['.txt', '.js', '.json', '.md', '.py', '.docx', '.doc', '.pdf', '.pptx', '.ppt'].includes(ext)) {
             ctx.push(`[${type}_url]: ${f.payload.url}`);
         }
     }
@@ -97,13 +98,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
     if (!query && ctx.length === 0) {
         userLock.delete(uid);
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
-        return reply("🧠 **amdus ai**\n━━━━━━━━━━━━━━━━\nhow to use:\n  amdus <message>\n  amdus <instruction> (reply to an image/file)\n\nexamples:\n  amdus write a python script\n  amdus summarize this document\n\nnote: i can see images, short videos, docs, can generate images and generate files. you also don't need to type 'amdus' if you're just chatting directly with me.");
+        return reply("🧠 **amdus ai**\n━━━━━━━━━━━━━━━━\nhow to use:\n  • amdus <question>\n  • reply to media with a task\n\ncapabilities:\n  • analyze images, videos & docs\n  • generate files & images\n  • real-time web access\n\nnote: you can chat directly without using 'amdus'.");
     }
 
     if (ctx.length > 0 && !query) {
         userLock.delete(uid);
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
-        return reply("media received. reply to it with what you want me to do (e.g., 'amdus describe this').");
+        return reply("📂 **media received**\n━━━━━━━━━━━━━━━━\ni see the file. now, just reply to it with your question.\n\nexamples:\n  • 'what is this?'\n  • 'summarize this doc'\n  • 'explain the photo'");
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
@@ -114,7 +115,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         
         if (!res || res.error) { 
             userLock.delete(uid); 
-            return reply("api's busy. try again in a sec."); 
+            return reply("api is a bit busy. try again in a sec."); 
         }
         
         if (res.data?.chatSessionId) saveSession(uid, res.data.chatSessionId);
@@ -122,37 +123,47 @@ module.exports.run = async function ({ event, args, api, reply }) {
         let text = parseAI(res);
         if (!text) { userLock.delete(uid); return reply("no response."); }
 
-        const mdLinkRegex = /\[(.*?)\]\((https?:\/\/.*?)\)/gi;
-        const urlRegex = /https?:\/\/[^\s)]+/gi;
+        const mdLinkRegex = /\[(.*?)\]\((.*?)\)/gi;
         let fileHandled = false;
 
         let match;
-        const mdLinks =[];
         while ((match = mdLinkRegex.exec(text)) !== null) {
-            mdLinks.push({ full: match[0], title: match[1], url: match[2].replace(/[).,]+$/, '') });
-        }
+            let fileUrl = match[2];
+            if (fileUrl.startsWith('/')) fileUrl = 'https://app.chipp.ai' + fileUrl;
 
-        for (const item of mdLinks) {
-            const isChipp = item.url.includes('chipp-images') || item.url.includes('chipp-application-files') || item.url.includes('app.chipp.ai/api/downloads');
-            if (isChipp) {
-                if (item.url.includes('chipp-images')) await api.sendAttachment("image", item.url, uid);
-                else await api.sendAttachment("file", item.url, uid);
-                text = text.replace(item.full, "");
-                fileHandled = true;
-            } else {
-                text = text.replace(item.full, `${item.title}: ${item.url}`);
-            }
-        }
+            const isChipp = fileUrl.includes('chipp-images') || 
+                            fileUrl.includes('chipp-application-files') || 
+                            fileUrl.includes('app.chipp.ai/api/downloads') ||
+                            fileUrl.includes('storage.googleapis.com/chipp-');
 
-        const remainingUrls = text.match(urlRegex) ||[];
-        for (const url of remainingUrls) {
-            const cleanUrl = url.replace(/[).,]+$/, '');
-            const isChipp = cleanUrl.includes('chipp-images') || cleanUrl.includes('chipp-application-files') || cleanUrl.includes('app.chipp.ai/api/downloads');
             if (isChipp) {
-                if (cleanUrl.includes('chipp-images')) await api.sendAttachment("image", cleanUrl, uid);
-                else await api.sendAttachment("file", cleanUrl, uid);
-                text = text.replace(url, "");
-                fileHandled = true;
+                const isImage = fileUrl.includes('chipp-images') || fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                const type = isImage ? 'image' : 'file';
+                const fileName = match[1].replace(/[^\w.-]/g, '_') || "document.txt";
+                const filePath = path.join(global.CACHE_PATH, `${Date.now()}_${fileName}`);
+
+                try {
+                    const download = await axios.get(fileUrl, {
+                        responseType: 'stream',
+                        headers: { 'Authorization': `Bearer ${process.env.CHIPP_API_KEY}` }
+                    });
+
+                    const writer = fs.createWriteStream(filePath);
+                    download.data.pipe(writer);
+
+                    await new Promise((resolve, reject) => {
+                        writer.on('finish', resolve);
+                        writer.on('error', reject);
+                    });
+
+                    await api.sendAttachment(type, filePath, uid);
+                    setTimeout(() => { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); }, 30000);
+                    
+                    text = text.replace(match[0], "");
+                    fileHandled = true;
+                } catch (e) {
+                    text = text.replace(match[0], `${match[1]}: ${fileUrl}`);
+                }
             }
         }
 
