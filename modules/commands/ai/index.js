@@ -22,11 +22,11 @@ async function executeAction(action, event, api, reply) {
     if (!command) return;
     if (cmdName === "remind") return await command.run({ event, args: [action.time, action.msg], api, reply });
     if (cmdName === "pinterest") {
-        try { await command.run({ event, args: [action.query, (action.count || 5).toString()], api, reply }); } 
+        try { await command.run({ event, args:[action.query, (action.count || 5).toString()], api, reply }); } 
         catch (e) { const gmage = global.client.commands.get("gmage"); if (gmage) await gmage.run({ event, args: [action.query], api, reply }); }
         return;
     }
-    try { await command.run({ event, args: [action.query], api, reply }); } catch (e) {}
+    try { await command.run({ event, args:[action.query], api, reply }); } catch (e) {}
 }
 
 async function handleTieredBan(userId, reason, reply) {
@@ -80,6 +80,12 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const query = args.join(" ").trim();
     const token = global.PAGE_ACCESS_TOKEN;
 
+    if (query.toLowerCase() === "reset") {
+        await db.UserStat.updateOne({ userId: uid }, { lastSessionId: null });
+        userLock.delete(uid);
+        return reply("memory cleared. starting a new chat.");
+    }
+
     const atts = [...(event.message?.reply_to?.attachments || []), ...(event.message?.attachments || [])];
     let ctx = [];
     const seen = new Set();
@@ -98,19 +104,21 @@ module.exports.run = async function ({ event, args, api, reply }) {
     if (!query && ctx.length === 0) {
         userLock.delete(uid);
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
-        return reply("🧠 **amdus ai**\n━━━━━━━━━━━━━━━━\nhow to use:\n  • amdus <question>\n  • reply to media with a task\n\ncapabilities:\n  • analyze images, videos & docs\n  • generate files & images\n  • real-time web access\n\nnote: you can chat directly without using 'amdus'.");
+        return reply("🧠 **amdus ai guide**\n━━━━━━━━━━━━━━━━\nhow to use:\n  • type your message directly\n  • reply to any image, video, or doc with a question\n  • type 'amdus reset' to start a new session\n\ncapabilities:\n  • vision: analyze photos and short videos\n  • files: read/write pdf, docx, and pptx\n  • search: real-time web access\n  • creation: generate images and documents");
     }
 
     if (ctx.length > 0 && !query) {
         userLock.delete(uid);
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
-        return reply("📂 **media received**\n━━━━━━━━━━━━━━━━\ni see the file. now, just reply to it with your question.\n\nexamples:\n  • 'what is this?'\n  • 'summarize this doc'\n  • 'explain the photo'");
+        return reply("📂 **media received**\n━━━━━━━━━━━━━━━━\ni see the file. now, just reply to it with your question.\n\nexamples:\n  • 'summarize this document'\n  • 'what is in this photo?'\n  • 'convert this to a text file'");
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
 
     try {
-        const session = getSession(uid);
+        const userData = await db.UserStat.findOne({ userId: uid });
+        const session = { chatSessionId: userData?.lastSessionId || null };
+
         const res = await askChipp(ctx.length ? `${ctx.join("\n")}\n\nuser_query: ${query}` : query, null, session);
         
         if (!res || res.error) { 
@@ -118,7 +126,9 @@ module.exports.run = async function ({ event, args, api, reply }) {
             return reply("api is a bit busy. try again in a sec."); 
         }
         
-        if (res.data?.chatSessionId) saveSession(uid, res.data.chatSessionId);
+        if (res.data?.chatSessionId) {
+            await db.UserStat.updateOne({ userId: uid }, { lastSessionId: res.data.chatSessionId });
+        }
 
         let text = parseAI(res);
         if (!text) { userLock.delete(uid); return reply("no response."); }
@@ -177,20 +187,27 @@ module.exports.run = async function ({ event, args, api, reply }) {
             } catch (e) {}
         }
 
-        const math = text.match(/(\$\$[\s\S]*?\approx\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\$)\$[^\$\n]+(?<!\$)\$)/g);
-        if (math) {
-            const cleanMathText = text.replace(/(\$\$[\s\S]*?\approx\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\$)\$[^\$\n]+(?<!\$)\$)/g, "").trim();
-            if (cleanMathText) await reply(cleanMathText.toLowerCase());
-            for (const m of math) {
-                const raw = m.replace(/\$\$|\\\[|\\\]|\\\(|\\\)/g, "").trim();
-                const mathUrl = `https://latex.codecogs.com/png.image?%5Cdpi%7B200%7D%20%5Cbg_white%20${encodeURIComponent(raw)}`;
-                await api.sendAttachment("image", mathUrl, uid);
-            }
-        } else {
-            let finalOutput = text.replace(/\{[\s\S]*?\}/g, "").replace(/[ ]{2,}/g, " ").trim();
-            if (finalOutput) await reply(finalOutput.toLowerCase());
-            else if (!fileHandled && !text.includes('{')) await reply(text.toLowerCase());
+        const mathRegex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\$)\$[^\$\n]+(?<!\$)\$)/g;
+        const mathBlocks = text.match(mathRegex) || [];
+
+        let finalOutput = text
+            .replace(mathRegex, "")
+            .replace(/\{[\s\S]*?\}/g, "")
+            .replace(/[ ]{2,}/g, " ")
+            .trim();
+
+        if (finalOutput) {
+            await reply(finalOutput.toLowerCase());
+        } else if (!fileHandled && mathBlocks.length === 0 && !text.includes('{')) {
+            await reply(text.toLowerCase());
         }
+
+        for (const m of mathBlocks) {
+            const raw = m.replace(/\$\$|\\\[|\\\]|\\\(|\\\)/g, "").trim();
+            const mathUrl = `https://latex.codecogs.com/png.image?%5Cdpi%7B200%7D%20%5Cbg_white%20${encodeURIComponent(raw)}`;
+            await api.sendAttachment("image", mathUrl, uid);
+        }
+
     } catch (err) {
         console.error(err.message);
     } finally {
