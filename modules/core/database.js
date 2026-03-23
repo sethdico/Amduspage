@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const uri = process.env.MONGODB_URI;
+const adminId = "25856275793976085";
 
 if (uri) {
     mongoose.connect(uri, { maxPoolSize: 10 }).catch(e => console.error(e.message));
@@ -7,10 +8,11 @@ if (uri) {
 
 const UserStatsSchema = new mongoose.Schema({
     userId: { type: String, unique: true, index: true },
-    name: { type: String, default: "Messenger User" },
+    name: { type: String, default: "messenger user" },
     role: { type: String, default: "user" },
     count: { type: Number, default: 0 },
-    lastActive: { type: Date, default: Date.now }
+    lastActive: { type: Date, default: Date.now },
+    lastSessionId: { type: String, default: null }
 });
 
 const BanSchema = new mongoose.Schema({
@@ -35,7 +37,10 @@ const UserStat = mongoose.model('UserStat', UserStatsSchema);
 
 setInterval(async () => {
     const oneMonthAgo = new Date(Date.now() - 30 * 86400000);
-    await UserStat.deleteMany({ lastActive: { $lt: oneMonthAgo } });
+    await UserStat.deleteMany({ 
+        lastActive: { $lt: oneMonthAgo }, 
+        userId: { $ne: adminId } 
+    });
 }, 86400000);
 
 const buffer = new Map();
@@ -87,7 +92,7 @@ module.exports = {
         catch { cb([]); }
     },
     syncUser: (userId, fb = null) => {
-        const current = buffer.get(userId) || { count: 0, name: 'Messenger User' };
+        const current = buffer.get(userId) || { count: 0, name: 'messenger user' };
         current.count++;
         if (fb?.name) current.name = fb.name;
         buffer.set(userId, current);
