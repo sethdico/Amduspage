@@ -12,12 +12,12 @@ module.exports = function (event) {
             type: "template",
             payload: {
               template_type: "customer_feedback",
-              title: "Rate your experience with Amdusbot", // nonchalant title
+              title: "Rate your experience with Amdusbot", 
               subtitle: "Help me improve",
               button_title: "Rate Now",
               feedback_screens: [{
                 questions: [{
-                  type: "csat", // Customer Satisfaction (1-5 stars)
+                  type: "csat", 
                   title: "How satisfied are you with the bot?",
                   id: "csat_question"
                 }]
