@@ -1,22 +1,11 @@
 const axios = require("axios");
-// UPDATED PATH: Points to config/config.json
-const { API_VERSION } = require("../../config/config.json");
+
+const API_VERSION = process.env.API_VERSION || "v21.0";
 
 module.exports = function (event) {
   return async function sendCarousel(elements, senderID) {
     const recipientID = senderID || event.sender.id;
 
-    /* 
-     ELEMENT STRUCTURE:
-     {
-       title: "Card Title",
-       subtitle: "Card description",
-       image_url: "https://...",
-       buttons: [ { type: "web_url", ... } ]
-     }
-    */
-
-    // Sanitize: Max 10 elements allowed by Facebook
     const sanitizedElements = elements.slice(0, 10);
 
     try {
