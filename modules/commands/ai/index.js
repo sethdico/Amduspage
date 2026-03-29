@@ -29,7 +29,7 @@ async function executeAction(action, event, api, reply) {
     if (cmdName === "remind") return await command.run({ event, args: [action.time, action.msg], api, reply });
     if (cmdName === "pinterest") {
         try { await command.run({ event, args:[action.query, (action.count || 5).toString()], api, reply }); } 
-        catch (e) { const gmage = global.client.commands.get("gmage"); if (gmage) await gmage.run({ event, args: [action.query], api, reply }); }
+        catch (e) { const gmage = global.client.commands.get("gmage"); if (gmage) await gmage.run({ event, args:[action.query], api, reply }); }
         return;
     }
     try { await command.run({ event, args:[action.query], api, reply }); } catch (e) {}
@@ -92,8 +92,8 @@ module.exports.run = async function ({ event, args, api, reply }) {
         return reply("memory cleared. starting a new chat.");
     }
 
-    const atts = [...(event.message?.reply_to?.attachments || []), ...(event.message?.attachments || [])];
-    let ctx = [];
+    const atts = [...(event.message?.reply_to?.attachments || []), ...(event.message?.attachments ||[])];
+    let ctx =[];
     const seen = new Set();
     
     for (const f of atts) {
@@ -102,7 +102,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         seen.add(url);
         const ext = path.extname(url.split('?')[0]).toLowerCase();
         const type = f.type === "image" ? "image" : (f.type === "video" ? "video" : "document");
-        if (f.type !== "file" || ['.txt', '.js', '.json', '.md', '.py', '.docx', '.doc', '.pdf', '.pptx', '.ppt'].includes(ext)) {
+        if (f.type !== "file" ||['.txt', '.js', '.json', '.md', '.py', '.docx', '.doc', '.pdf', '.pptx', '.ppt'].includes(ext)) {
             ctx.push(`[${type}_url]: ${f.payload.url}`);
         }
     }
@@ -194,7 +194,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         }
 
         const mathRegex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\$)\$[^\$\n]+(?<!\$)\$)/g;
-        const mathBlocks = text.match(mathRegex) || [];
+        const mathBlocks = text.match(mathRegex) ||[];
 
         let finalOutput = text
             .replace(mathRegex, "")
@@ -208,11 +208,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
             await reply(text.toLowerCase());
         }
 
-        for (const m of mathBlocks) {
+        mathBlocks.forEach((m, i) => {
             const raw = m.replace(/\$\$|\\\[|\\\]|\\\(|\\\)/g, "").trim();
             const mathUrl = `https://latex.codecogs.com/png.image?%5Cdpi%7B200%7D%20%5Cbg_white%20${encodeURIComponent(raw)}`;
-            await api.sendAttachment("image", mathUrl, uid);
-        }
+            setTimeout(() => {
+                api.sendAttachment("image", mathUrl, uid);
+            }, (i + 1) * 1200);
+        });
 
     } catch (err) {
         console.error(err.message);
