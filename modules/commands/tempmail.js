@@ -1,19 +1,13 @@
 const { http } = require("../utils");
-const sessions = new Map();
+const CacheManager = require("../core/cache");
 
-// cleanup old sessions every 10 min
-setInterval(() => {
-    const now = Date.now();
-    for (const [userId, session] of sessions.entries()) {
-        if (session.createdAt && now - session.createdAt > 3600000) sessions.delete(userId);
-    }
-}, 600000);
+const sessions = new CacheManager(1000, 3600000); 
 
 module.exports.config = {
     name: "tempmail", 
-    aliases: ["gen", "inbox", "read", "delete"], 
+    aliases:["gen", "inbox", "read", "delete"], 
     author: "Sethdico", 
-    version: "9.0", 
+    version: "9.1", 
     category: "Utility", 
     description: "temp mail", 
     adminOnly: false, 
@@ -34,7 +28,6 @@ module.exports.run = async function ({ event, args, reply, api }) {
 
     const session = sessions.get(id);
 
-    // read specific message
     if (action === "read") {
         const num = parseInt(args[1]) - 1;
         if (!session?.lastMessages?.[num]) return reply("message not found");
@@ -43,17 +36,16 @@ module.exports.run = async function ({ event, args, reply, api }) {
         return api.sendButton(`from: ${mail.from_name}\n\n${body}`, [{ title: "back", payload: "tempmail inbox" }], id);
     }
 
-    // check inbox
     if (action === "inbox") {
         if (!session) return reply("generate an email first");
         try {
             const res = await http.get(`https://api.apyhub.com/boomlify/emails/messages/${session.id}`, { 
                 headers: { 'apy-token': token }
             });
-            const msgs = res.data.messages || [];
+            const msgs = res.data.messages ||[];
             
             if (!msgs.length) {
-                return api.sendButton("inbox empty", [{ title: "refresh", payload: "tempmail inbox" }], id);
+                return api.sendButton("inbox empty",[{ title: "refresh", payload: "tempmail inbox" }], id);
             }
             
             session.lastMessages = msgs;
@@ -65,7 +57,7 @@ module.exports.run = async function ({ event, args, reply, api }) {
             });
             list += "type: read [number]";
             
-            const btns = [
+            const btns =[
                 { title: "refresh", payload: "tempmail inbox" }, 
                 { title: "delete", payload: "tempmail delete" }
             ];
@@ -75,7 +67,6 @@ module.exports.run = async function ({ event, args, reply, api }) {
         }
     }
 
-    // generate new email
     if (action === "gen") {
         try {
             const res = await http.post('https://api.apyhub.com/boomlify/emails/create', {}, { 
@@ -88,11 +79,11 @@ module.exports.run = async function ({ event, args, reply, api }) {
                 sessions.set(id, { 
                     email: data.address, 
                     id: data.id, 
-                    lastMessages: [], 
+                    lastMessages:[], 
                     createdAt: Date.now() 
                 });
                 
-                const btns = [{ title: "inbox", payload: "tempmail inbox" }];
+                const btns =[{ title: "inbox", payload: "tempmail inbox" }];
                 await api.sendButton(`${data.address}\n\nexpires in 1 hour`, btns, id);
                 return reply(data.address);
             }
@@ -101,7 +92,6 @@ module.exports.run = async function ({ event, args, reply, api }) {
         }
     }
 
-    // delete email
     if (action === "delete") {
         if (session) {
             try { 
@@ -115,15 +105,14 @@ module.exports.run = async function ({ event, args, reply, api }) {
         return reply("no active email");
     }
 
-    // show status/menu
     if (session) {
         const msg = `active email\n${session.email}`;
-        const btns = [
+        const btns =[
             { title: "inbox", payload: "tempmail inbox" }, 
             { title: "delete", payload: "tempmail delete" }
         ];
         return api.sendButton(msg, btns, id);
     } else {
-        return api.sendButton("temp email\n\ncreate a disposable email", [{ title: "generate", payload: "tempmail gen" }], id);
+        return api.sendButton("temp email\n\ncreate a disposable email",[{ title: "generate", payload: "tempmail gen" }], id);
     }
 };
