@@ -7,29 +7,31 @@ module.exports.config = {
     description: "send an announcement to everyone.",
     adminOnly: true,
     usePrefix: false,
-    cooldown: 10 
+    cooldown: 15 
 };
 
 module.exports.run = async ({ event, args, api, reply }) => {
     const msg = args.join(" ");
-    if (!msg) return reply("what's the announcement?");
+
+    if (!msg) {
+        return reply("📢 **broadcast guide**\n━━━━━━━━━━━━━━━━\nhow to use:\n  broadcast <message>\n\nexample:\n  broadcast we have updated the ai memory system!");
+    }
 
     try {
         const users = await db.getAllUsers();
         const recipients = users.filter(u => u.userId !== event.sender.id);
 
-        if (!recipients.length) return reply("no users to reach.");
+        if (!recipients.length) return reply("no users found to reach.");
 
-        reply(`📢 queueing announcement for ${recipients.length} users...`);
+        reply(`📢 starting broadcast to ${recipients.length} users. processing in background...`);
 
-        for (const u of recipients) {
-            global.apiQueue.add(async () => {
-                try {
-                    await api.sendMessage(`📢 **announcement**\n\n${msg}`, u.userId);
-                } catch (e) {}
-            });
-        }
+        recipients.forEach((u, index) => {
+            setTimeout(() => {
+                api.sendMessage(`📢 announcement\n\n${msg}`, u.userId).catch(() => {});
+            }, index * 50); 
+        });
+
     } catch (e) { 
-        reply("broadcast failed to initialize."); 
+        reply("broadcast failed to start."); 
     }
 };
