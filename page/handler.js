@@ -23,7 +23,7 @@ module.exports = async function (event, api) {
         }
 
         if (!isNaN(payload)) {
-            return reply(payload);
+            return reply(`📋 user id copied:\n\n${payload}\n\n(ready to paste)`);
         }
     }
 
@@ -58,6 +58,10 @@ module.exports = async function (event, api) {
     const command = global.client.commands.get(cmdName) || global.client.commands.get(global.client.aliases.get(cmdName));
 
     if (command) {
+        if (!command.config) {
+            console.error(`Command ${cmdName} has invalid config`);
+            return reply("command is misconfigured.");
+        }
         if (global.disabledCommands?.has(command.config.name) && !isAdmin) return reply("command disabled.");
         if (command.config.adminOnly && !isAdmin) return;
 

@@ -1,4 +1,4 @@
-const axios = require("axios");
+const { http } = require("../utils");
 
 module.exports.config = {
     name: "sim",
@@ -26,7 +26,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         if (!ask || !ans) return reply("provide both a question and an answer.");
 
         try {
-            await axios.get("https://simsimi.ooguy.com/teach", { params: { ask, ans, apikey: apiKey } });
+            await http.get("https://simsimi.ooguy.com/teach", { params: { ask, ans, apikey: apiKey } });
             return reply(`learned it. if u say "${ask}", i'll say "${ans}".`);
         } catch (e) {
             return reply("couldn't learn that right now.");
@@ -36,7 +36,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, id);
 
     try {
-        const res = await axios.get("https://simsimi.ooguy.com/sim", { 
+        const res = await http.get("https://simsimi.ooguy.com/sim", { 
             params: { query: args.join(" "), apikey: apiKey } 
         });
         

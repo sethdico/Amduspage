@@ -58,7 +58,9 @@ async function upload(senderId, data, token) {
         form.append('message', JSON.stringify({ attachment: { type: mime.startsWith('image/') ? 'image' : 'file', payload: { is_reusable: true } } }));
         form.append('filedata', buffer, { filename: data.fileName || 'document.txt', contentType: mime });
         await axios.post(`https://graph.facebook.com/v21.0/me/messages?access_token=${token}`, form, { headers: form.getHeaders() });
-    } catch (e) {}
+    } catch (e) {
+        console.error('Facebook file upload failed:', e.message);
+    }
 }
 
 module.exports.config = {
@@ -178,6 +180,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
                     text = text.replace(match[0], "");
                     fileHandled = true;
                 } catch (e) {
+                    console.error('File download failed:', e.message);
                     text = text.replace(match[0], `${match[1]}: ${fileUrl}`);
                 }
             }
@@ -190,7 +193,9 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 if (act.action === "ban") { userLock.delete(uid); return await handleTieredBan(uid, act.reason || "violation", reply); }
                 if (act.tool) { userLock.delete(uid); return await executeAction(act, event, api, reply); }
                 if (act.fileBase64) { await upload(uid, act, token); fileHandled = true; }
-            } catch (e) {}
+            } catch (e) {
+                console.error('Failed to parse AI action JSON:', e.message);
+            }
         }
 
         const mathRegex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\$)\$[^\$\n]+(?<!\$)\$)/g;
@@ -203,9 +208,9 @@ module.exports.run = async function ({ event, args, api, reply }) {
             .trim();
 
         if (finalOutput) {
-            await reply(finalOutput.toLowerCase());
+            await reply(finalOutput);
         } else if (!fileHandled && mathBlocks.length === 0 && !text.includes('{')) {
-            await reply(text.toLowerCase());
+            await reply(text);
         }
 
         mathBlocks.forEach((m, i) => {

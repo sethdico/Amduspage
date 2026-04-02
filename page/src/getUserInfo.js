@@ -22,10 +22,11 @@ module.exports = function (event) {
       if (participants) {
         const user = participants.find(p => p.id === psid);
         if (user && user.name) {
+          const nameParts = user.name.split(' ');
           return {
             name: user.name.toLowerCase(),
-            first_name: user.name.split(' ')[0],
-            last_name: user.name.split(' ').slice(1).join(' ') || "",
+            first_name: nameParts[0] || "user",
+            last_name: nameParts.slice(1).join(' ') || "",
             id: psid
           };
         }

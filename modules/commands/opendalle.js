@@ -1,4 +1,4 @@
-const axios = require("axios");
+const { http } = require("../utils");
 
 module.exports.config = {
     name: "dalle",
@@ -23,7 +23,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
     try {
         reply("generating... this might take a sec.");
 
-        const res = await axios.get("https://api-library-kohi.onrender.com/api/opendalle", {
+        const res = await http.get("https://api-library-kohi.onrender.com/api/opendalle", {
             params: { prompt: prompt }
         });
 

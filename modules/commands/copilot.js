@@ -37,7 +37,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const result = res.data?.data;
         if (!result || !result.text) return reply("i couldn't get an answer from copilot.");
 
-        await api.sendMessage(`🚀 **copilot**\n\n${result.text}`.toLowerCase(), uid);
+        await api.sendMessage(`🚀 **copilot**\n\n${result.text}`, uid);
 
         if (result.citations && result.citations.length > 0) {
             const cards = result.citations.slice(0, 10).map(source => {

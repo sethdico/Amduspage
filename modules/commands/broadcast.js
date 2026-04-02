@@ -25,13 +25,26 @@ module.exports.run = async ({ event, args, api, reply }) => {
 
         reply(`📢 starting broadcast to ${recipients.length} users. processing in background...`);
 
-        recipients.forEach((u, index) => {
-            setTimeout(() => {
-                api.sendMessage(`📢 announcement\n\n${msg}`, u.userId).catch(() => {});
-            }, index * 50); 
-        });
+        (async () => {
+            let sent = 0;
+            let failed = 0;
+            for (let i = 0; i < recipients.length; i++) {
+                try {
+                    await api.sendMessage(`📢 announcement\n\n${msg}`, recipients[i].userId);
+                    sent++;
+                } catch (e) {
+                    failed++;
+                    console.error(`Broadcast failed for user ${recipients[i].userId}:`, e.message);
+                }
+                if (i < recipients.length - 1) {
+                    await new Promise(r => setTimeout(r, 100)); // Rate limit: 100ms between messages
+                }
+            }
+            console.log(`Broadcast complete: ${sent} sent, ${failed} failed`);
+        })();
 
-    } catch (e) { 
+    } catch (e) {
+        console.error('Broadcast error:', e.message);
         reply("broadcast failed to start."); 
     }
 };

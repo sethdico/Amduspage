@@ -30,7 +30,7 @@ module.exports.run = async ({ event, args, api, reply }) => {
         const answer = res.data.message || res.data.response;
         if (!answer) return reply("no response.");
         
-        await api.sendMessage(`🔍 **you.com**\n\n${answer}`.toLowerCase(), senderID);
+        await api.sendMessage(`🔍 **you.com**\n\n${answer}`, senderID);
     } catch (e) { 
         reply("you.com is acting up."); 
     } finally {

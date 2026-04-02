@@ -54,7 +54,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const data = res.data;
         if (data?.response) {
             const modelName = data.fallback ? "gemini flash" : "gemini pro";
-            await api.sendMessage(`✨ **${modelName}**\n\n${data.response}`.toLowerCase(), uid);
+            await api.sendMessage(`✨ **${modelName}**\n\n${data.response}`, uid);
         } else {
             reply("no response from gemini.");
         }

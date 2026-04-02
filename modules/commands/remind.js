@@ -11,24 +11,27 @@ const loadReminders = () => {
                     try {
                         await global.api.sendMessage(`⏰ **reminder**\n\n"${r.message}"`, r.userId);
                         await db.deleteReminder(r.id);
-                    } catch (e) {}
+                    } catch (e) {
+                        console.error(`Failed to send reminder to ${r.userId}:`, e.message);
+                    }
                 }, delay);
             }
         });
     });
 };
 
-module.exports.config = { 
-    name: "remind", 
-    author: "sethdico", 
-    version: "2.9", 
-    category: "Utility", 
-    adminOnly: false, 
-    usePrefix: false, 
-    cooldown: 3 
+module.exports.config = {
+    name: "remind",
+    author: "sethdico",
+    version: "2.9",
+    category: "Utility",
+    description: "set reminders for yourself",
+    adminOnly: false,
+    usePrefix: false,
+    cooldown: 3
 };
 
-module.exports.run = async ({ event, args, api, reply }) => {
+module.exports.run = async function ({ event, args, api, reply }) {
     const senderID = event.sender.id;
     const input = args.join(" ");
 

@@ -20,11 +20,13 @@ module.exports.run = async function ({ reply }) {
             const filePath = path.join(global.CACHE_PATH, file);
             try {
                 const stats = await fs.stat(filePath);
-                if (now - stats.mtimeMs > 3600000) { // 1 hour
+                if (now - stats.mtimeMs > 3600000) {
                     await fs.unlink(filePath);
                     cleaned++;
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.error(`Failed to clean file ${file}:`, e.message);
+            }
         }
         reply(`🧹 cleaned ${cleaned} old files`);
     } catch (e) { 

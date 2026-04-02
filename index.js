@@ -103,7 +103,11 @@ if (!fs.existsSync(global.CACHE_PATH)) {
     
     app.get('/', (req, res) => res.json({ status: 'online', uptime: process.uptime() }));
     app.get('/webhook', (req, res) => {
-        const vToken = process.env.VERIFY_TOKEN || config.VERIFY_TOKEN;
+        const vToken = process.env.VERIFY_TOKEN;
+        if (!vToken) {
+            console.error('VERIFY_TOKEN not set in environment');
+            return res.sendStatus(500);
+        }
         if (req.query['hub.verify_token'] === vToken) res.status(200).send(req.query['hub.challenge']);
         else res.sendStatus(403);
     });

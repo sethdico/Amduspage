@@ -98,7 +98,9 @@ module.exports.run = async function ({ event, args, reply, api }) {
                 await http.delete(`https://api.apyhub.com/boomlify/emails/${session.id}`, { 
                     headers: { 'apy-token': token }
                 }); 
-            } catch (e) {}
+            } catch (e) {
+                console.error('Failed to delete email:', e.message);
+            }
             sessions.delete(id);
             return reply("deleted");
         }

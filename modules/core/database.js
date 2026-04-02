@@ -89,7 +89,10 @@ module.exports = {
     deleteReminder: (id) => Reminder.deleteOne({ id }),
     getActiveReminders: async (cb) => {
         try { cb(await Reminder.find({ fireAt: { $gt: new Date() } })); } 
-        catch { cb([]); }
+        catch (e) { 
+            console.error('Failed to load active reminders:', e.message);
+            cb([]);
+        }
     },
     syncUser: (userId, fb = null) => {
         const current = buffer.get(userId) || { count: 0, name: 'messenger user' };

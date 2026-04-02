@@ -1,4 +1,4 @@
-const axios = require("axios");
+const { http } = require("../utils");
 
 module.exports.config = {
     name: "gmage",
@@ -21,7 +21,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, id);
 
     try {
-        const res = await axios.get("https://api-library-kohi.onrender.com/api/gmage", {
+        const res = await http.get("https://api-library-kohi.onrender.com/api/gmage", {
             params: { q: query }
         });
 
