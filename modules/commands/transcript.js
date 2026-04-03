@@ -21,12 +21,14 @@ module.exports.run = async function ({ args, api, reply, event }) {
         if (!res.data.messages?.length) return reply("empty transcript.");
 
         let report = `📜 Chat Log\n━━━━\n`;
-        res.data.messages.forEach(m => {
-            report += `${m.role === "user" ? "👤" : "🤖"} ${m.role}: ${m.content}\n\n`;
+        res.data.messages.slice(-20).forEach(m => {
+            const content = m.content?.substring(0, 500) || "(no content)";
+            report += `${m.role === "user" ? "👤" : "🤖"} ${m.role}: ${content}\n\n`;
         });
 
         await api.sendMessage(report, event.sender.id);
     } catch (e) {
-        reply("transcript failed.");
+        console.error("Transcript error:", e.message, e.response?.data);
+        reply(`transcript failed: ${e.response?.status === 404 ? "session not found" : e.response?.status === 401 ? "invalid api key" : "api error"}`);
     }
 };

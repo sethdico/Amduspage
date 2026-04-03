@@ -51,9 +51,12 @@ module.exports.run = async function ({ args, event, api, reply }) {
         
         const btns =[
             { type: "postback", title: isBanned ? "unban" : "ban", payload: `${isBanned ? "unban" : "ban"} ${target.userId}` },
-            { type: "postback", title: "copy id", payload: target.userId },
-            { type: "postback", title: "view chat", payload: `chat_${target.lastSessionId}` }
+            { type: "postback", title: "copy id", payload: target.userId }
         ];
+        
+        if (target.lastSessionId) {
+            btns.push({ type: "postback", title: "view chat", payload: `chat_${target.lastSessionId}` });
+        }
         
         return api.sendButton(msg.toLowerCase(), btns, id);
     }
