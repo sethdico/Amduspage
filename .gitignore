@@ -3,7 +3,6 @@ node_modules/
 
 # Secrets and Configs
 .env
-config.json
 .vscode/
 
 # Root Cache (Ignore all temp files, but keep the folder alive via .gitkeep)
