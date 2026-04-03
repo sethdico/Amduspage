@@ -1,10 +1,23 @@
 const mongoose = require('mongoose');
 const uri = process.env.MONGODB_URI;
-const adminId = "25856275793976085";
 
-if (uri) {
-    mongoose.connect(uri, { maxPoolSize: 10 }).catch(e => console.error(e.message));
+async function connect() {
+    if (!uri) return;
+    try {
+        await mongoose.connect(uri, { maxPoolSize: 10 });
+        console.log('Database connected');
+    } catch (e) {
+        console.error('Database connection failed:', e.message);
+        setTimeout(connect, 5000);
+    }
 }
+
+connect();
+
+mongoose.connection.on('disconnected', () => {
+    console.log('Database disconnected, attempting reconnect...');
+    setTimeout(connect, 5000);
+});
 
 const UserStatsSchema = new mongoose.Schema({
     userId: { type: String, unique: true, index: true },
@@ -38,32 +51,32 @@ const UserStat = mongoose.model('UserStat', UserStatsSchema);
 setInterval(async () => {
     const oneMonthAgo = new Date(Date.now() - 30 * 86400000);
     await UserStat.deleteMany({ 
-        lastActive: { $lt: oneMonthAgo }, 
-        userId: { $ne: adminId } 
+        lastActive: { $lt: oneMonthAgo }
     });
 }, 86400000);
 
 const buffer = new Map();
-setInterval(async () => {
+
+const flushBuffer = async () => {
     if (buffer.size === 0) return;
-    const ops = [];
-    for (const [userId, data] of buffer) {
-        ops.push({
-            updateOne: {
-                filter: { userId },
-                update: { $inc: { count: data.count }, $set: { lastActive: new Date(), name: data.name } },
-                upsert: true
-            }
-        });
-    }
+    const ops = Array.from(buffer).map(([userId, data]) => ({
+        updateOne: {
+            filter: { userId },
+            update: { $inc: { count: data.count }, $set: { lastActive: new Date(), name: data.name } },
+            upsert: true
+        }
+    }));
     buffer.clear();
-    try { await UserStat.bulkWrite(ops); } catch (e) {}
-}, 30000);
+    try { await UserStat.bulkWrite(ops); } catch (e) { console.error("DB Flush Error:", e.message); }
+};
+
+setInterval(flushBuffer, 30000);
 
 module.exports = {
     Ban,
     UserStat,
     Reminder,
+    flushBuffer,
     addBan: async (id, reason, level, durationMs) => {
         if (global.ADMINS.has(String(id))) return;
         const expiresAt = durationMs ? new Date(Date.now() + durationMs) : null;

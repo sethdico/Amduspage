@@ -1,7 +1,5 @@
 const db = require("../modules/core/database");
 const cooldowns = new Map();
-const activeRequests = new Set();
-const userLock = new Set();
 
 module.exports = async function (event, api) {
     if (!event.sender?.id || event.message?.is_echo) return;
@@ -19,7 +17,7 @@ module.exports = async function (event, api) {
 
         if (payload.startsWith("chat_")) {
             const sid = payload.split("_")[1];
-            return require("../modules/commands/transcript").run({ args: [sid], api, reply });
+            return require("../modules/commands/transcript").run({ args: [sid], api, reply, event });
         }
 
         if (!isNaN(payload)) {
@@ -27,18 +25,7 @@ module.exports = async function (event, api) {
         }
     }
 
-    const mid = event.message?.mid;
-    if (mid) {
-        if (activeRequests.has(mid)) return;
-        activeRequests.add(mid);
-        setTimeout(() => activeRequests.delete(mid), 60000);
-    }
-
-    let role = global.userCache.get(`role_${id}`);
-    if (!role) {
-        role = await db.getRole(id);
-        global.userCache.set(`role_${id}`, role); 
-    }
+    let role = await db.getRole(id);
     
     const isAdmin = role === "admin";
     const userInfo = await api.getUserInfo(id);
@@ -53,9 +40,20 @@ module.exports = async function (event, api) {
     const body = (event.message?.text || event.postback?.payload || "").trim();
     if (!body && !event.message?.attachments) return;
 
-    const args = body.split(/\s+/);
-    const cmdName = args.shift()?.toLowerCase();
-    const command = global.client.commands.get(cmdName) || global.client.commands.get(global.client.aliases.get(cmdName));
+    const words = body.split(/\s+/);
+    let cmdName = null;
+    let cmdIndex = -1;
+    for (let i = 0; i < words.length; i++) {
+        const word = words[i].toLowerCase();
+        if (global.client.commands.has(word) || global.client.aliases.has(word)) {
+            cmdName = word;
+            cmdIndex = i;
+            break;
+        }
+    }
+    const args = cmdIndex >= 0 ? words.slice(cmdIndex + 1) : words;
+    if (cmdName) cmdName = global.client.aliases.get(cmdName) || cmdName;
+    const command = cmdName ? global.client.commands.get(cmdName) : null;
 
     if (command) {
         if (!command.config) {
@@ -84,16 +82,9 @@ module.exports = async function (event, api) {
     } 
 
     const ai = global.client.commands.get("amdus");
-    if (ai && !userLock.has(id) && !global.disabledCommands?.has("amdus")) {
-        userLock.add(id);
-        const safety = setTimeout(() => userLock.delete(id), 45000);
+    if (ai && !global.disabledCommands?.has("amdus")) {
         try {
-            if (api.sendTypingIndicator) api.sendTypingIndicator(true, id);
             await ai.run({ event, args: body.split(/\s+/), api, reply });
-        } finally { 
-            clearTimeout(safety);
-            userLock.delete(id);
-            if (api.sendTypingIndicator) api.sendTypingIndicator(false, id); 
-        }
+        } catch (e) {}
     }
 };

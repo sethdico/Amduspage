@@ -76,7 +76,6 @@ module.exports.run = async function ({ event, args, api, reply }) {
             }
             return;
         } catch (e) {
-            // fallback through free dict
         }
     }
 

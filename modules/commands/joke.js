@@ -10,7 +10,6 @@ module.exports.run = async ({ event, api }) => {
     const msg = `🤣 ${res.data.setup}\n\n👉 ${res.data.punchline}`;
     const buttons = [{ type: "postback", title: "🔄 Another One", payload: "joke" }];
 
-    // Flow: Postback "joke" triggers the command again without typing
     api.sendButton(msg, buttons, event.sender.id);
   } catch (e) {
     api.sendMessage("🤣 Why did the bot fail? Because the API was down.", event.sender.id);

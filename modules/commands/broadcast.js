@@ -37,7 +37,7 @@ module.exports.run = async ({ event, args, api, reply }) => {
                     console.error(`Broadcast failed for user ${recipients[i].userId}:`, e.message);
                 }
                 if (i < recipients.length - 1) {
-                    await new Promise(r => setTimeout(r, 100)); // Rate limit: 100ms between messages
+                    await new Promise(r => setTimeout(r, 100));
                 }
             }
             console.log(`Broadcast complete: ${sent} sent, ${failed} failed`);

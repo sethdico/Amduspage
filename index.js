@@ -11,13 +11,15 @@ const { validateInput, verifyWebhookSignature } = require('./modules/middleware/
 const CacheManager = require('./modules/core/cache');
 const config = require('./config/config.json');
 const CONSTANTS = require('./config/constants');
-const Queue = require('./modules/core/queue');
+
+const moduleInstallAttempts = new Set();
 
 function autoInstall(moduleName) {
     try {
         execSync(`npm install ${moduleName}`, { stdio: 'inherit' });
         return true;
     } catch (e) {
+        console.error(`autoInstall failed for ${moduleName}:`, e.message);
         return false;
     }
 }
@@ -29,7 +31,12 @@ function safeRequire(filePath) {
         const match = err.message.match(/Cannot find module '(.+?)'/);
         if (match) {
             const pkg = match[1];
-            if (!pkg.startsWith('.') && !pkg.startsWith('/')) {
+            if (!pkg.startsWith('.') && !pkg.startsWith('/') && !pkg.includes(':')) {
+                console.log(`Missing dependency: ${pkg}. Attempting install...`);
+                if (moduleInstallAttempts.has(pkg)) {
+                    throw new Error(`Failed to require ${filePath}. previous auto-install attempt for ${pkg} already failed.`);
+                }
+                moduleInstallAttempts.add(pkg);
                 if (autoInstall(pkg)) return require(filePath);
             }
         }
@@ -74,12 +81,9 @@ global.CACHE_PATH = path.join(__dirname, 'cache');
 global.client = { commands: new Map(), aliases: new Map() };
 global.BANNED_USERS = new Set();
 global.MAINTENANCE_MODE = false;
-global.MONITOR_MODE = false;
 
-global.sessions = new CacheManager(CONSTANTS.MAX_SESSIONS, CONSTANTS.ONE_HOUR);
 global.userCache = new CacheManager(CONSTANTS.MAX_CACHE_SIZE, CONSTANTS.ONE_DAY);
 global.messageCache = new CacheManager(CONSTANTS.MAX_CACHE_SIZE, CONSTANTS.SIX_HOURS);
-global.apiQueue = new Queue(2, 300);
 
 if (!fs.existsSync(global.CACHE_PATH)) {
     fs.mkdirSync(global.CACHE_PATH, { recursive: true });
@@ -119,3 +123,20 @@ if (!fs.existsSync(global.CACHE_PATH)) {
     const PORT = process.env.PORT || 8080;
     app.listen(PORT);
 })();
+
+const shutdown = async () => {
+    console.log('\n⚠️ Server shutting down... Flushing database buffer...');
+    try {
+        if (db.flushBuffer) await db.flushBuffer();
+        console.log('✅ Database saved. Exiting.');
+        process.exit(0);
+    } catch (e) {
+        console.error('❌ Failed to save data during shutdown:', e.message);
+        process.exit(1);
+    }
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+process.on('unhandledRejection', (err) => console.error('Unhandled Rejection:', err.message));
+process.on('uncaughtException', (err) => console.error('Uncaught Exception:', err.message));

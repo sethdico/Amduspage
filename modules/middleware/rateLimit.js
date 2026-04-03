@@ -3,9 +3,9 @@ const CONSTANTS = require('../../config/constants');
 const activeRequests = new Map();
 
 function rateLimiter(req, res, next) {
-    // facebook bypass
     const userAgent = req.headers['user-agent'] || '';
-    if (userAgent.includes('facebookexternalhit')) {
+    
+    if (userAgent.includes('facebookexternalhit') || userAgent.includes('facebookplatform')) {
         return next();
     }
 
@@ -28,7 +28,7 @@ function rateLimiter(req, res, next) {
     next();
 }
 
-// cleanup every 5 min
+cleanup every 5 min
 setInterval(() => {
     const now = Date.now();
     for (const [ip, times] of activeRequests.entries()) {

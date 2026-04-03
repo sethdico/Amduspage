@@ -31,7 +31,6 @@ class Logger {
             const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
             await fs.appendFile(this.logFile, logEntry);
         } catch (e) {
-            // fail silently
         }
     }
 
