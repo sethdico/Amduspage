@@ -23,20 +23,20 @@ module.exports.run = async function ({ args, reply }) {
     }
 
     if (global.ADMINS.has(targetID)) {
-        return reply("can't ban an admin.");
+        return reply("can't ban an admin");
     }
 
     if (isUnban) {
         await db.removeBan(targetID);
         global.BANNED_USERS.delete(targetID);
-        return reply(`unbanned ${targetID}.`);
+        return reply(`unbanned ${targetID}`);
     }
 
     try {
         await db.addBan(targetID, reason);
         global.BANNED_USERS.add(targetID);
-        reply(`banned ${targetID}.\nreason: ${reason}`.toLowerCase());
+        reply(`banned ${targetID}\nreason: ${reason}`.toLowerCase());
     } catch (e) {
-        reply("failed to ban.");
+        reply("failed to ban");
     }
 };

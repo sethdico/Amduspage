@@ -19,6 +19,6 @@ module.exports.run = async function ({ event, api }) {
 
     api.sendButton(msg, buttons, event.sender.id);
   } catch (e) {
-    api.sendMessage("🤣 Why did the bot fail? Because the API was down.", event.sender.id);
+    api.sendMessage("🤣 why did the bot fail? because the api was down", event.sender.id);
   }
 };

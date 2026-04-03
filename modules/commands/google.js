@@ -25,7 +25,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const res = await http.get(url);
         const items = res.data.items;
 
-        if (!items) return reply(`couldn't find anything for "${query}".`);
+        if (!items) return reply(`couldn't find anything for "${query}"`);
 
         const elements = items.slice(0, 5).map(item => ({
             title: item.title.substring(0, 80),
@@ -36,7 +36,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
         await api.sendCarousel(elements, senderID);
     } catch (e) {
-        reply("google is acting up right now.");
+        reply("google is acting up right now");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
     }

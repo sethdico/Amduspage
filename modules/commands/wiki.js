@@ -45,7 +45,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         if (query === "featured") {
             const res = await http.get(`https://en.wikipedia.org/api/rest_v1/feed/featured/${yyyy}/${mm}/${dd}`);
             const tfa = res.data.tfa;
-            if (!tfa) return reply("no featured article today.");
+            if (!tfa) return reply("no featured article today");
             
             if (tfa.thumbnail?.source) await api.sendAttachment("image", tfa.thumbnail.source, id).catch(()=>{});
             
@@ -57,7 +57,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         if (query === "news") {
             const res = await http.get(`https://en.wikipedia.org/api/rest_v1/feed/featured/${yyyy}/${mm}/${dd}`);
             const news = res.data.news;
-            if (!news || !news.length) return reply("no news right now.");
+            if (!news || !news.length) return reply("no news right now");
             
             const story = news[0];
             const msg = `📰 **in the news**\n\n${story.story}`;
@@ -83,7 +83,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const res = await http.get(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`);
         const data = res.data;
 
-        if (data.type === "disambiguation") return reply("that's too broad. try being more specific.");
+        if (data.type === "disambiguation") return reply("that's too broad, try being more specific");
         if (data.originalimage?.source) await api.sendAttachment("image", data.originalimage.source, id).catch(()=>{});
 
         const msg = `🔍 **${data.title}**\n\n${data.extract.substring(0, 400)}...`;
@@ -92,7 +92,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         await api.sendButton(msg.toLowerCase(), btns, id);
 
     } catch (e) {
-        reply(`couldn't find anything for "${query}".`);
+        reply(`couldn't find anything for "${query}"`);
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, id);
     }

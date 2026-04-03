@@ -35,7 +35,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         });
 
         const result = res.data?.data;
-        if (!result || !result.text) return reply("i couldn't get an answer from copilot.");
+        if (!result || !result.text) return reply("couldn't get an answer from copilot");
 
         await api.sendMessage(`🚀 **copilot**\n\n${result.text}`, uid);
 
@@ -54,7 +54,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
             await api.sendCarousel(cards, uid);
         }
     } catch (e) {
-        reply("copilot is having some issues right now.");
+        reply("copilot is having some issues right now");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }

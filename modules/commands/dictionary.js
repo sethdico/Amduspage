@@ -26,7 +26,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         try {
             const res = await http.get(`https://api.urbandictionary.com/v0/define?term=${encodeURIComponent(query)}`);
             const list = res.data.list;
-            if (!list || !list.length) return reply(`no slang found for "${query}".`);
+            if (!list || !list.length) return reply(`no slang found for "${query}"`);
 
             const entry = list[0];
             const def = entry.definition.replace(/[\[\]]/g, "");
@@ -36,7 +36,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
             const btns =[{ type: "postback", title: "formal def", payload: `dict ${query}` }];
             return api.sendButton(msg.toLowerCase(), btns, senderID);
         } catch (e) {
-            return reply("urban dictionary is down rn.");
+            return reply("urban dictionary is down rn");
         } finally {
             if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
         }
@@ -76,6 +76,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
             }
             return;
         } catch (e) {
+            console.error('Dictionary command error:', e.message);
         }
     }
 
@@ -97,7 +98,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         if (audioUrl) await api.sendAttachment("audio", audioUrl, senderID).catch(()=>{});
 
     } catch (e) {
-        reply(`couldn't find a definition for "${query}".`);
+        reply(`couldn't find a definition for "${query}"`);
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
     }

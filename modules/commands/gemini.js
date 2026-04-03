@@ -24,7 +24,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         return reply("✨ **gemini 3 pro**\n━━━━━━━━━━━━━━━━\nhow to use:\n  gemini <query>\n  gemini <query> (reply to an image)\n  gemini clear (reset chat)\n\nexample:\n  gemini tell me a story");
     }
 
-    if (!cookie) return reply("gemini cookie is missing.");
+    if (!cookie) return reply("gemini cookie is missing");
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
 
@@ -35,9 +35,9 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 message: "clear",
                 cookies: { "__Secure-1PSID": cookie.trim() }
             });
-            return reply("memory cleared.");
+            return reply("memory cleared");
         } catch (e) {
-            return reply("failed to clear history.");
+            return reply("failed to clear history");
         } finally {
             if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
         }
@@ -56,10 +56,10 @@ module.exports.run = async function ({ event, args, api, reply }) {
             const modelName = data.fallback ? "gemini flash" : "gemini pro";
             await api.sendMessage(`✨ **${modelName}**\n\n${data.response}`, uid);
         } else {
-            reply("no response from gemini.");
+            reply("no response from gemini");
         }
     } catch (e) {
-        reply("gemini is busy or cookie expired.");
+        reply("gemini is busy or cookie expired");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }

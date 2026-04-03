@@ -17,9 +17,9 @@ module.exports.run = async function ({ event, args, reply }) {
     const cmd = global.client.commands.get(input) || global.client.commands.get(global.client.aliases.get(input));
     if (cmd) {
         if (cmd.config.adminOnly && !isAdmin) return; 
-        return reply(`📌 **${cmd.config.name}**\n${cmd.config.description || 'no description provided.'}`.toLowerCase());
+        return reply(`📌 **${cmd.config.name}**\n${cmd.config.description || 'no description provided'}`.toLowerCase());
     }
-    return reply(`never heard of the command "${input}".`);
+    return reply(`never heard of the command "${input}"`);
   }
 
   const commands = Array.from(global.client.commands.values());
@@ -44,6 +44,6 @@ module.exports.run = async function ({ event, args, reply }) {
       }
   });
   
-  msg += `type 'help <command>' for info or type '<command>' for tutorial guide on usage.`;
+  msg += `type 'help <command>' for info or type '<command>' for tutorial guide on usage`;
   return reply(msg.toLowerCase());
 };
