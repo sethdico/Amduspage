@@ -14,6 +14,17 @@ module.exports.run = async function ({ args, reply }) {
     const action = args[0]?.toLowerCase();
     const reason = args.slice(1).join(" ") || "working on updates";
 
+    if (!action) {
+        return reply(`𝗠𝗔𝗜𝗡𝗧𝗘𝗡𝗔𝗡𝗖𝗘
+
+usage:
+maintenance on <reason>
+maintenance off
+
+example:
+maintenance on system update`);
+    }
+
     if (action === "on") {
         global.MAINTENANCE_MODE = true;
         global.MAINTENANCE_REASON = reason;

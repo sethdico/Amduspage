@@ -34,7 +34,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         num = Math.floor(Math.random() * 48) + 1;
     }
 
-    const msg = `law #${num}\n\n${LAWS[num - 1]}`;
+    const msg = `48 𝗟𝗔𝗪𝗦 𝗢𝗙 𝗣𝗢𝗪𝗘𝗥\n\nlaw #${num}\n${LAWS[num - 1]}`;
     
     try {
         await api.sendMessage(msg, event.sender.id);

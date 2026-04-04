@@ -15,7 +15,14 @@ module.exports.run = async function ({ event, args, api, reply }) {
     let targetUrl = event.message?.reply_to?.text || args.join("");
 
     if (!targetUrl) {
-        return reply("📸 **screenshot**\n━━━━━━━━━━━━━━━━\nhow to use:\n  ss <link>\n  or reply to a link with 'ss'\n\nexample:\n  ss github.com");
+        return reply(`𝗦𝗖𝗥𝗘𝗘𝗡𝗦𝗛𝗢𝗧
+
+usage:
+screenshot <link>
+or reply to a link with 'ss'
+
+example:
+ss github.com`);
     }
 
     targetUrl = targetUrl.replace(/\s+/g, "").replace(/\[dot\]|\(dot\)/gi, ".");

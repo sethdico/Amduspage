@@ -19,7 +19,7 @@ module.exports.run = async function ({ args, reply }) {
     let reason = args.slice(isUnban ? 2 : (action === "ban" ? 2 : 1)).join(" ") || "no reason.";
 
     if (!targetID || isNaN(targetID)) {
-        return reply("usage:\n  ban <id> <reason>\n  unban <id>");
+        return reply("𝗕𝗔𝗡\n\nusage:\nban <id> <reason>\nunban <id>");
     }
 
     if (global.ADMINS.has(targetID)) {

@@ -14,7 +14,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const msg = args.join(" ");
 
     if (!msg) {
-        return reply("broadcast\n\nusage:\nbroadcast <message>\n\nexample:\nbroadcast system maintenance in 10 minutes");
+        return reply(`𝗕𝗥𝗢𝗔𝗗𝗖𝗔𝗦𝗧
+
+usage:
+broadcast <message>
+
+example:
+broadcast system maintenance in 10 minutes`);
     }
 
     try {

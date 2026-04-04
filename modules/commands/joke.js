@@ -14,7 +14,7 @@ module.exports.config = {
 module.exports.run = async function ({ event, api }) {
   try {
     const res = await http.get("https://official-joke-api.appspot.com/random_joke");
-    const msg = `${res.data.setup}\n\n${res.data.punchline}`;
+    const msg = `𝗝𝗢𝗞𝗘\n\n${res.data.setup}\n\n${res.data.punchline}`;
     api.sendMessage(msg, event.sender.id);
   } catch (e) {
     api.sendMessage("joke api is down", event.sender.id);

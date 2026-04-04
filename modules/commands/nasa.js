@@ -18,7 +18,14 @@ module.exports.run = async function ({ event, args, api, reply }) {
     if (!apiKey) return reply("nasa api key is missing");
 
     if (!args[0]) {
-        return reply("nasa apod\n\nusage:\nnasa - today's photo\nnasa random - random photo\n\nexample:\nnasa random");
+        return reply(`𝗡𝗔𝗦𝗔 𝗔𝗣𝗢𝗗
+
+usage:
+nasa - today's photo
+nasa random - random photo
+
+example:
+nasa random`);
     }
 
     let url = `https://api.nasa.gov/planetary/apod?api_key=${apiKey}`;

@@ -17,7 +17,15 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const query = isSlang ? args.slice(1).join(" ") : args.join(" ");
 
     if (!query) {
-        return reply("dictionary\n\nusage:\ndict <word>\ndict slang <word>\n\nexamples:\ndict serendipity\ndict slang rizz");
+        return reply(`𝗗𝗜𝗖𝗧𝗜𝗢𝗡𝗔𝗥𝗬
+
+usage:
+dict <word>
+dict slang <word>
+
+examples:
+dict serendipity
+dict slang rizz`);
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);

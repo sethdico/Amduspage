@@ -21,7 +21,15 @@ module.exports.run = async function ({ event, args, api, reply }) {
     ].filter(a => a.type === "image").map(a => a.payload.url);
 
     if (!prompt && attachments.length === 0) {
-        return reply("gemini ai\n\nusage:\ngemini <query>\ngemini <query> (reply to image)\ngemini clear (reset chat)\n\nexample:\ngemini tell me a story");
+        return reply(`𝗚𝗘𝗠𝗜𝗡𝗜 𝗔𝗜
+
+usage:
+gemini <query>
+gemini <query> (reply to image)
+gemini clear (reset chat)
+
+example:
+gemini tell me a story`);
     }
 
     if (!cookie) return reply("gemini cookie is missing");
@@ -54,7 +62,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const data = res.data;
         if (data?.response) {
             const modelName = data.fallback ? "gemini flash" : "gemini pro";
-            await api.sendMessage(`✨ **${modelName}**\n\n${data.response}`, uid);
+            await api.sendMessage(`${modelName}:\n${data.response}`, uid);
         } else {
             reply("no response from gemini");
         }

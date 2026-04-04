@@ -34,7 +34,17 @@ module.exports.run = async function ({ event, args, api }) {
   const id = event.sender.id;
   
   if (!args.length) {
-      return api.sendMessage("translator\n\nusage:\ntrans <text>\ntrans to <lang> <text>\n\nexamples:\ntrans to ja good morning\ntrans to es how are you\n\nnote: defaults to english or tagalog if no language is set", id);
+      return api.sendMessage(`𝗧𝗥𝗔𝗡𝗦𝗟𝗔𝗧𝗢𝗥
+
+usage:
+trans <text>
+trans to <lang> <text>
+
+examples:
+trans to ja good morning
+trans to es how are you
+
+note: defaults to english or tagalog if no language is set`, id);
   }
 
   let targetLang = "en";

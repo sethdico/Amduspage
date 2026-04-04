@@ -17,7 +17,7 @@ module.exports.run = async function ({ event, api, reply }) {
         const res = await http.get("https://urangkapolka.vercel.app/api/bible");
         const { verse, reference, text } = res.data;
         
-        const msg = `${reference || "bible"}\n\n${verse || text}`;
+        const msg = `𝗕𝗜𝗕𝗟𝗘\n\n${reference || "bible"}\n\n${verse || text}`;
         api.sendMessage(msg.toLowerCase(), senderID);
     } catch (e) {
         reply("bible api is down");

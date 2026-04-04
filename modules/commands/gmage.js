@@ -15,7 +15,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const id = event.sender.id;
 
     if (!query) {
-        return reply("google images\n\nusage:\ngmage <search term>\n\nexample:\ngmage sunset beach");
+        return reply(`𝗚𝗢𝗢𝗚𝗟𝗘 𝗜𝗠𝗔𝗚𝗘𝗦
+
+usage:
+gmage <search term>
+
+example:
+gmage sunset beach`);
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, id);

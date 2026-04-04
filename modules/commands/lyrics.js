@@ -15,7 +15,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const id = event.sender.id;
 
     if (!query) {
-        return reply("lyrics search\n\nusage:\nlyrics <song title>\n\nexample:\nlyrics 16 mirrors");
+        return reply(`𝗟𝗬𝗥𝗜𝗖𝗦 𝗦𝗘𝗔𝗥𝗖𝗛
+
+usage:
+lyrics <song title>
+
+example:
+lyrics 16 mirrors`);
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, id);
@@ -40,7 +46,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
             });
 
             const list = res.data.data;
-            if (!list || !list.length) return reply("couldn't find those lyrics in backup either.");
+            if (!list || !list.length) return reply(`𝗟𝗬𝗥𝗜𝗖𝗦
+
+usage:
+lyrics <song title>
+
+example:
+lyrics 16 mirrors`);
 
             const song = list[0];
             if (!song.plainLyrics) return reply("lyrics are unavailable for this one");

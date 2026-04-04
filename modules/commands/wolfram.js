@@ -15,7 +15,14 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const input = args.join(" ");
     
     if (!input) {
-        return reply("wolfram alpha\n\nusage:\nwolfram <query>\n\nexample:\nwolfram derivative of x^2\nwolfram distance to moon");
+        return reply(`𝗪𝗢𝗟𝗙𝗥𝗔𝗠 𝗔𝗟𝗣𝗛𝗔
+
+usage:
+wolfram <query>
+
+example:
+wolfram derivative of x^2
+wolfram distance to moon`);
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, id);

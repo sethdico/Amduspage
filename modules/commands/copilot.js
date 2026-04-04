@@ -24,7 +24,16 @@ module.exports.run = async function ({ event, args, api, reply }) {
     }
 
     if (!prompt) {
-        return reply("copilot ai\n\nusage:\ncopilot <prompt>\ncopilot -think <prompt>\ncopilot -gpt5 <prompt>\n\nexamples:\ncopilot what is a quantum computer\ncopilot -think solve this riddle");
+        return reply(`𝗖𝗢𝗣𝗜𝗟𝗢𝗧 𝗔𝗜
+
+usage:
+copilot <prompt>
+copilot -think <prompt>
+copilot -gpt5 <prompt>
+
+examples:
+copilot what is a quantum computer
+copilot -think solve this riddle`);
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
@@ -37,7 +46,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const result = res.data?.data;
         if (!result || !result.text) return reply("couldn't get an answer from copilot");
 
-        await api.sendMessage(result.text, uid);
+        await api.sendMessage(`copilot:\n${result.text}`, uid);
 
         if (result.citations && result.citations.length > 0) {
             const cards = result.citations.slice(0, 10).map(source => {

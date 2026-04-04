@@ -16,7 +16,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const input = args.join(" ").trim();
     
     if (!input) {
-        return reply("you.com ai\n\nusage:\nyou <question>\n\nexample:\nyou who won the last world cup");
+        return reply(`𝗬𝗢𝗨.𝗖𝗢𝗠 𝗔𝗜
+
+usage:
+you <question>
+
+example:
+you who won the last world cup`);
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
@@ -30,7 +36,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const answer = res.data.message || res.data.response;
         if (!answer) return reply("no response");
         
-        await api.sendMessage(`${answer}`, senderID);
+        await api.sendMessage(`you.com:\n${answer}`, senderID);
     } catch (e) { 
         reply("you.com is acting up"); 
     } finally {

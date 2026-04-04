@@ -32,7 +32,7 @@ module.exports.run = async function ({ reply }) {
             ? topCmds.slice(0, 5).map((c, i) => `  ${i + 1}. ${c.command} (${c.count})`).join('\n') 
             : "  none yet";
 
-        const msg = `system stats
+        const msg = `𝗦𝗬𝗦𝗧𝗘𝗠 𝗦𝗧𝗔𝗧𝗦
 
 bot status
   commands: ${global.client.commands.size}

@@ -14,7 +14,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
     let raw = event.message?.reply_to?.text || args.join("");
     
     if (!raw) {
-        return reply(`all in one downloader
+        return reply(`𝗔𝗟𝗟 𝗜𝗡 𝗢𝗡𝗘 𝗗𝗢𝗪𝗡𝗟𝗢𝗔𝗗𝗘𝗥
 
 downloads videos from social media platforms
 

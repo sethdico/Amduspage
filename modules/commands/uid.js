@@ -14,7 +14,7 @@ module.exports.run = async function ({ event, api, reply }) {
     
     try {
         const info = await api.getUserInfo(id);
-        const msg = `user profile\n\nname: ${info.name}\nid: ${id}\nstatus: active`;
+        const msg = `𝗨𝗦𝗘𝗥 𝗣𝗥𝗢𝗙𝗜𝗟𝗘\n\nname: ${info.name}\nid: ${id}\nstatus: active`;
 
         await api.sendAttachment("image", pic, id);
         await api.sendMessage(msg.toLowerCase(), id);

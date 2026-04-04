@@ -36,7 +36,17 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const input = args.join(" ");
 
     if (!input) {
-        return reply("reminders\n\nusage:\nremind <time> <msg>\nremind list\nremind cancel <number>\n\nexamples:\nremind 10m check oven\nremind 2h sleep\nremind 1d touch grass");
+        return reply(`𝗥𝗘𝗠𝗜𝗡𝗗𝗘𝗥𝗦
+
+usage:
+remind <time> <msg>
+remind list
+remind cancel <number>
+
+examples:
+remind 10m check oven
+remind 2h sleep
+remind 1d touch grass`);
     }
 
     if (args[0] === "list") {

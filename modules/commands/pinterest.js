@@ -15,7 +15,17 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const senderID = event.sender.id;
 
     if (!args.length) {
-        return reply("pinterest\n\nusage:\npin <search>\npin <search> <count>\n\nexamples:\npin aesthetic room 5\npin anime wallpapers\n\nnote: maximum is 10 images");
+        return reply(`𝗣𝗜𝗡𝗧𝗘𝗥𝗘𝗦𝗧
+
+usage:
+pin <search>
+pin <search> <count>
+
+examples:
+pin aesthetic room 5
+pin anime wallpapers
+
+note: maximum is 10 images`);
     }
 
     let count = 5;

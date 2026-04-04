@@ -15,7 +15,14 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const query = args[0]?.toLowerCase();
     
     if (!query) {
-        return reply("pokedex\n\nusage:\npokemon <name/id/random>\n\nexample:\npokemon pikachu\npokemon random");
+        return reply(`𝗣𝗢𝗞𝗘𝗗𝗘𝗫
+
+usage:
+pokemon <name/id/random>
+
+example:
+pokemon pikachu
+pokemon random`);
     }
 
     const id = query === "random" ? Math.floor(Math.random() * 1025) + 1 : query;

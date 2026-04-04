@@ -15,7 +15,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const uid = event.sender.id;
 
     if (!prompt) {
-        return reply("dalle generator\n\nusage:\ndalle <prompt>\n\nexample:\ndalle cyberpunk cat");
+        return reply(`𝗗𝗔𝗟𝗟𝗘 𝗚𝗘𝗡𝗘𝗥𝗔𝗧𝗢𝗥
+
+usage:
+dalle <prompt>
+
+example:
+dalle cyberpunk cat`);
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);

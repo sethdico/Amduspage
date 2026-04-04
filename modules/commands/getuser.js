@@ -17,14 +17,14 @@ module.exports.run = async function ({ args, event, api, reply }) {
 
     if (sub === "search") {
         const query = args.slice(1).join(" ");
-        if (!query) return reply("usage: getuser search <name>");
+        if (!query) return reply("𝗚𝗘𝗧𝗨𝗦𝗘𝗥\n\nusage: getuser search <name>");
         
         const list = await db.UserStat.find({ 
             name: new RegExp(query, 'i'),
             userId: { $nin: adminIds } 
         }).limit(10).lean();
         
-        if (!list.length) return reply("no users found.");
+        if (!list.length) return reply("𝗚𝗘𝗧𝗨𝗦𝗘𝗥\n\nno users found.");
         
         global.sessions.set(`list_${id}`, { users: list });
         
