@@ -1,7 +1,6 @@
 module.exports.config = {
     name: "help",
     author: "sethdico",
-    version: "22.1",
     category: "Utility",
     description: "shows all available commands",
     adminOnly: false,
@@ -27,14 +26,14 @@ module.exports.run = async function ({ event, args, reply }) {
     });
 
     if (results.length === 0) {
-        return reply(`❌ no commands found for "${keyword}"`);
+        return reply(`no commands found for "${keyword}"`);
     }
 
-    let msg = `🔍 **search results for "${keyword}"**\n━━━━━━━━━━━━━━━━\n\n`;
+    let msg = `search results for "${keyword}"\n\n`;
     results.forEach(cmd => {
-        msg += `📌 ${cmd.config.name}\n`;
-        msg += `📝 ${cmd.config.description || 'no description'}\n`;
-        msg += `🏷️ ${cmd.config.category || 'uncategorized'}\n\n`;
+        msg += `${cmd.config.name}\n`;
+        msg += `${cmd.config.description || 'no description'}\n`;
+        msg += `${cmd.config.category || 'uncategorized'}\n\n`;
     });
     
     return reply(msg.toLowerCase());
@@ -43,31 +42,30 @@ module.exports.run = async function ({ event, args, reply }) {
   if (input) {
     const cmd = global.client.commands.get(input) || global.client.commands.get(global.client.aliases.get(input));
     if (cmd) {
-        if (cmd.config.adminOnly && !isAdmin) return reply("❌ admin-only command");
+        if (cmd.config.adminOnly && !isAdmin) return; 
         
-        let info = `📌 **${cmd.config.name}**\n`;
-        info += `📝 ${cmd.config.description || 'no description provided'}\n`;
-        info += `🏷️ category: ${cmd.config.category || 'uncategorized'}\n`;
-        info += `⏱️ cooldown: ${cmd.config.cooldown || 0}s\n`;
-        info += `👤 admin only: ${cmd.config.adminOnly ? 'yes' : 'no'}\n`;
+        const cooldown = cmd.config.cooldown ? `cooldown: ${cmd.config.cooldown}s` : '';
+        const author = cmd.config.author ? `author: ${cmd.config.author}` : '';
+        const aliases = cmd.config.aliases?.length ? `aliases: ${cmd.config.aliases.join(', ')}` : '';
         
-        if (cmd.config.aliases && cmd.config.aliases.length > 0) {
-            info += `🔄 aliases: ${cmd.config.aliases.join(', ')}\n`;
-        }
-        
-        info += `\n💡 usage: ${cmd.config.usage || cmd.config.name}`;
+        let info = `help\n\n`;
+        info += `${cmd.config.name.toLowerCase()} - ${cmd.config.description || 'no description provided'}\n\n`;
+        info += `usage:\n${cmd.config.name.toLowerCase()} <query>\n`;
+        if (aliases) info += `${cmd.config.name.toLowerCase()} <${cmd.config.aliases[0]}>\n`;
+        info += `\nexample:\n${cmd.config.name.toLowerCase()} tell me a story`;
+        if (author) info += `\n\n${cmd.config.author}`;
+        if (cooldown) info += `\n${cmd.config.cooldown}s`;
         
         return reply(info.toLowerCase());
     }
-    return reply(`❌ command "${input}" not found. type 'help' to see all commands`);
+    return reply(`command "${input}" not found`);
   }
 
   const commands = Array.from(global.client.commands.values());
-  const categories = [...new Set(commands.map(c => c.config.category || "Uncategorized"))].sort();
+  const categories = [...new Set(commands.map(c => c.config.category || "Uncategorized"))];
 
-  let msg = "📚 **command directory**\n━━━━━━━━━━━━━━━━\n\n";
-  let totalCmds = 0;
-  let disabledCmds = 0;
+  let msg = `command list\n\n`;
+  msg += `total: ${commands.length} commands | access: ${isAdmin ? 'admin' : 'user'}\n\n`;
   
   categories.forEach(cat => {
       const cmds = commands.filter(c => (c.config.category || "Uncategorized") === cat);
@@ -76,34 +74,18 @@ module.exports.run = async function ({ event, args, reply }) {
 
       const availableCmds = cmds
           .filter(c => !c.config.adminOnly || isAdmin)
-          .filter(c => !global.disabledCommands?.has(c.config.name));
-          
-      const disabledInCategory = cmds
-          .filter(c => !c.config.adminOnly || isAdmin)
-          .filter(c => global.disabledCommands?.has(c.config.name));
-
-      const names = availableCmds
-          .map(c => c.config.name)
+          .filter(c => !global.disabledCommands?.has(c.config.name))
+          .map(c => `${c.config.name}`)
           .sort()
-          .join(", ");
+          .join(', ');
 
-      totalCmds += availableCmds.length;
-      disabledCmds += disabledInCategory.length;
-
-      if (names) {
-          msg += `📂 **${cat.toLowerCase()}** (${availableCmds.length})\n${names}\n`;
-          if (disabledInCategory.length > 0) {
-              msg += `🔴 ${disabledInCategory.length} disabled\n`;
-          }
-          msg += `\n`;
+      if (availableCmds) {
+          const count = cmds.filter(c => !c.config.adminOnly || isAdmin).length;
+          msg += `${cat.toLowerCase()} [${count}]: ${availableCmds}\n\n`;
       }
   });
   
-  msg += `━━━━━━━━━━━━━━━━\n`;
-  msg += `📊 total: ${totalCmds} commands`;
-  if (disabledCmds > 0) msg += ` | 🔴 ${disabledCmds} disabled`;
-  msg += `\n💡 type 'help <command>' for detailed info`;
-  msg += `\n🔍 type 'help search <keyword>' to search commands`;
+  msg += `tips:\ntype any command for usage guide\nhelp <command> for details\n\nexample:\ngemini or help gemini`;
   
   return reply(msg.toLowerCase());
 };

@@ -15,7 +15,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const query = args.join(" ");
 
     if (!query) {
-        return reply("🔎 **google search**\n━━━━━━━━━━━━━━━━\nhow to use:\n  google <search term>\n\nexample:\n  google how to bake a cake");
+        return reply(`𝗚𝗢𝗢𝗚𝗟𝗘 𝗦𝗘𝗔𝗥𝗖𝗛
+
+usage:
+google <search term>
+
+example:
+google how to bake a cake`);
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
@@ -25,7 +31,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const res = await http.get(url);
         const items = res.data.items;
 
-        if (!items) return reply(`couldn't find anything for "${query}".`);
+        if (!items) return reply(`couldn't find anything for "${query}"`);
 
         const elements = items.slice(0, 5).map(item => ({
             title: item.title.substring(0, 80),
@@ -36,7 +42,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
         await api.sendCarousel(elements, senderID);
     } catch (e) {
-        reply("google is acting up right now.");
+        reply("google is acting up right now");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
     }

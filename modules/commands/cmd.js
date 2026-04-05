@@ -15,20 +15,20 @@ module.exports.run = async function ({ args, reply }) {
     const target = args[1]?.toLowerCase();
 
     if (!action || !target) {
-        return reply("🛠️ **command manager**\n━━━━━━━━━━━━━━━━\nhow to use:\n  cmd off <name>\n  cmd on <name>\n\nexample:\n  cmd off gmage");
+        return reply("𝗖𝗢𝗠𝗠𝗔𝗡𝗗 𝗠𝗔𝗡𝗔𝗚𝗘𝗥\n\nusage:\ncmd off <name>\ncmd on <name>\n\nexample:\ncmd off gmage");
     }
 
-    if (!global.client.commands.has(target)) return reply("that command doesn't exist.");
+    if (!global.client.commands.has(target)) return reply("𝗠𝗔𝗜𝗡𝗧𝗘𝗡𝗔𝗡𝗖𝗘\n\nusage:\nmaintenance on <reason>\nmaintenance off\n\nexample:\nmaintenance on system update");
 
     if (action === "off") {
         global.disabledCommands.add(target);
         await db.saveSetting("disabled_cmds", Array.from(global.disabledCommands));
-        return reply(`${target} is now disabled.`);
+        return reply(`${target} is now disabled`);
     }
 
     if (action === "on") {
         global.disabledCommands.delete(target);
         await db.saveSetting("disabled_cmds", Array.from(global.disabledCommands));
-        return reply(`${target} is now enabled.`);
+        return reply(`${target} is now enabled`);
     }
 };

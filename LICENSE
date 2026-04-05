@@ -1,4 +1,4 @@
-MIT License
+MIT License with Fork Guidelines
 
 Copyright (c) 2026 Sethdico
 
@@ -19,3 +19,43 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+================================================================================
+FORK GUIDELINES AND ATTRIBUTION
+================================================================================
+
+1. ATTRIBUTION REQUIREMENT
+   If you fork or redistribute this Software, you must:
+   - Keep this license file intact and unchanged
+   - Credit the original author (Sethdico) in your README or documentation
+   - Link back to the original repository: https://github.com/sethdico/Amduspage
+
+2. FORK GUIDELINES
+   - You are free to modify and improve the bot
+   - You may not claim this code as entirely your own original work
+   - Please share improvements back to the community when possible
+
+3. COMMERCIAL USE
+   - Commercial use is permitted under MIT terms
+   - You must still provide attribution even in commercial deployments
+
+4. CODE OF CONDUCT
+   By using this Software, you agree to:
+   - Not use this bot for malicious purposes
+   - Not abuse API rate limits or services
+   - Respect user privacy and data protection laws
+   - Take responsibility for your modifications
+
+5. NO OFFICIAL SUPPORT
+   The author provides this Software as-is with no obligation for:
+   - Technical support
+   - Bug fixes for your modifications
+   - Compatibility with third-party services
+
+For questions or to report improvements, visit:
+https://github.com/sethdico/Amduspage
+
+================================================================================
+This project is not affiliated with Meta, Facebook, or any third-party APIs used.
+All trademarks belong to their respective owners.
+================================================================================

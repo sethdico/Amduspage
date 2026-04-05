@@ -4,7 +4,7 @@ module.exports.config = {
     name: "gemini",
     author: "sethdico",
     category: "AI",
-    description: "gemini 3 pro with vision.",
+    description: "Google Gemini AI with advanced vision capabilities",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -21,10 +21,18 @@ module.exports.run = async function ({ event, args, api, reply }) {
     ].filter(a => a.type === "image").map(a => a.payload.url);
 
     if (!prompt && attachments.length === 0) {
-        return reply("✨ **gemini 3 pro**\n━━━━━━━━━━━━━━━━\nhow to use:\n  gemini <query>\n  gemini <query> (reply to an image)\n  gemini clear (reset chat)\n\nexample:\n  gemini tell me a story");
+        return reply(`𝗚𝗘𝗠𝗜𝗡𝗜 𝗔𝗜
+
+usage:
+gemini <query>
+gemini <query> (reply to image)
+gemini clear (reset chat)
+
+example:
+gemini tell me a story`);
     }
 
-    if (!cookie) return reply("gemini cookie is missing.");
+    if (!cookie) return reply("gemini cookie is missing");
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
 
@@ -35,9 +43,9 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 message: "clear",
                 cookies: { "__Secure-1PSID": cookie.trim() }
             });
-            return reply("memory cleared.");
+            return reply("memory cleared");
         } catch (e) {
-            return reply("failed to clear history.");
+            return reply("failed to clear history");
         } finally {
             if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
         }
@@ -54,12 +62,12 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const data = res.data;
         if (data?.response) {
             const modelName = data.fallback ? "gemini flash" : "gemini pro";
-            await api.sendMessage(`✨ **${modelName}**\n\n${data.response}`, uid);
+            await api.sendMessage(`${modelName}:\n${data.response}`, uid);
         } else {
-            reply("no response from gemini.");
+            reply("no response from gemini");
         }
     } catch (e) {
-        reply("gemini is busy or cookie expired.");
+        reply("gemini is busy or cookie expired");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }

@@ -9,7 +9,7 @@ module.exports.config = {
     author: "Sethdico",
     version: "9.1",
     category: "Utility",
-    description: "temp mail",
+    description: "temporary email generator",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -18,7 +18,7 @@ module.exports.config = {
 module.exports.run = async function ({ event, args, reply, api }) {
     const id = event.sender.id;
     const token = process.env.APY_TOKEN;
-    if (!token) return reply("missing api token");
+    if (!token) return reply("𝗧𝗘𝗠𝗣𝗠𝗔𝗜𝗟\n\nmissing api token");
 
     let action = args[0]?.toLowerCase();
     const text = (event.message?.text || "").toLowerCase();
@@ -30,7 +30,7 @@ module.exports.run = async function ({ event, args, reply, api }) {
 
     if (action === "read") {
         const num = parseInt(args[1]) - 1;
-        if (!session?.lastMessages?.[num]) return reply("message not found");
+        if (!session?.lastMessages?.[num]) return reply("𝗧𝗘𝗠𝗣𝗠𝗔𝗜𝗟\n\nmessage not found");
         const mail = session.lastMessages[num];
         const body = mail.body_text.substring(0, 600);
         return api.sendButton(`from: ${mail.from_name}\n\n${body}`, [{ title: "back", payload: "tempmail inbox" }], id);

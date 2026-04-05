@@ -194,7 +194,9 @@ module.exports.run = async function ({ event, args, api, reply }) {
                 }
 
                 if (act.fileBase64) { await upload(uid, act, token); fileHandled = true; }
-            } catch (e) {}
+            } catch (e) {
+                console.error('AI action processing error:', e.message);
+            }
         }
 
         const mathRegex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\$)\$[^\$\n]+(?<!\$)\$)/g;

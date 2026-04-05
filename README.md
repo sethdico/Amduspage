@@ -1,12 +1,10 @@
-
-
-
 <div align="center">
 
-  <img src="https://media1.tenor.com/m/Mq6ZeawKT1MAAAAd/nazo-no-kanojo-x-nazo-no-kanojo.gif" width="600" style="border-radius: 10px; box-shadow: 0px 5px 15px rgba(0,0,0,0.3);">
+<img src="https://media1.tenor.com/m/Mq6ZeawKT1MAAAAd/nazo-no-kanojo-x-nazo-no-kanojo.gif" width="600">
 
-  # AMDUSPAGE
+# AMDUSPAGE
 
+<<<<<<< HEAD
   ![NodeJS](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
   ![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
   ![Express](https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white)
@@ -18,23 +16,27 @@
     Easy to set up and use.<br>
     Built by a solo dev
   </p>
+=======
+![NodeJS](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
+![Express](https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white)
+![Version](https://img.shields.io/badge/Version-15.0.0-blue?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-  <p>
-    Created by <a href="https://www.facebook.com/seth09asher"><b>Seth Asher Salinguhay</b></a>
-  </p>
+**Optimized Messenger Pagebot.**  
+Easy to set up and customize for your own page.  
+Built by a solo dev
+>>>>>>> 6590e5687fd16e076ec192408df9b73ccbc7977f
 
-  <div style="display:flex; justify-content:center; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-    <a href="#deployment"><img src="https://img.shields.io/badge/Get%20Started-🚀-brightgreen?style=for-the-badge" alt="Get Started"></a>
-    <a href="https://github.com/sethdico/Amduspage/commit" title="Latest Commit"><img src="https://img.shields.io/github/last-commit/sethdico/Amduspage?style=for-the-badge" alt="Last Commit"></a>
-    <a href="https://github.com/sethdico/Amduspage/issues" title="Open Issues"><img src="https://img.shields.io/github/issues/sethdico/Amduspage?style=for-the-badge&color=orange" alt="Issues"></a>
-  </div>
+Created by **[Seth Asher Salinguhay](https://www.facebook.com/seth09asher)**
 
 </div>
 
-<br>
+---
 
 ## 📋 Table of Contents
 - [📂 Project Structure](#-project-structure)
+<<<<<<< HEAD
 - [🛠️ Setup & Configuration](#️-setup--configuration)
 - [🚀 Deployment](#-deployment)
 - [🤖 Features](#-features)
@@ -43,11 +45,19 @@
 - [📄 License](#-license)
 - [⚠️ FAQ](#-faq)
 - [🛠️ Support](#️-support)
+=======
+- [🛠️ Setup](#-setup)
+- [🚀 Deployment](#-deployment)
+- [🤖 Commands](#-commands)
+- [📄 License](#-license)
+- [👍 Like & Review](#-like--review)
+>>>>>>> 6590e5687fd16e076ec192408df9b73ccbc7977f
 
 ---
 
 ## 📂 Project Structure
 
+<<<<<<< HEAD
 Simple and organized structure.
 
 | Directory | What it does |
@@ -62,10 +72,22 @@ Simple and organized structure.
 | `tests/` | Test files |
 | `index.js` | Main app file |
 | `webhook.js` | Facebook webhook handler |
+=======
+| Directory | Description |
+| :--- | :--- |
+| `modules/commands/` | Bot Logic (AI, Media, Fun, Utility, Admin commands) |
+| `modules/core/` | System Core (Database, Cache & Queue Managers) |
+| `modules/middleware/` | Security (Rate limiting & Input Validation) |
+| `modules/utils/` | Utilities (Helper functions and tools) |
+| `page/src/` | Interface (Facebook API Wrappers) |
+| `config/` | Configuration (API Endpoints & Constants) |
+| `index.js` | Entry Point (Main Application File) |
+| `webhook.js` | Webhook Handler (Facebook Messenger webhook processing) |
+>>>>>>> 6590e5687fd16e076ec192408df9b73ccbc7977f
 
 ---
 
-## 🛠️ Setup & Configuration
+## 🛠️ Setup
 
 ### Requirements
 - **Node.js** >= 16.0.0
@@ -73,6 +95,7 @@ Simple and organized structure.
 
 ### Installation
 1. Clone the repository
+<<<<<<< HEAD
 2. Run `npm install`
 3. Set up environment variables
 4. Start with `node index.js`
@@ -102,18 +125,26 @@ Set these in your hosting environment or `.env` file.
 | `PORT` | Server port (default: 8080) |
 
 </details>
+=======
+2. Install dependencies: `npm install`
+3. Configure environment variables
+4. Start: `node index.js`
+
+### Environment Variables
+```env
+PAGE_ACCESS_TOKEN=your_token
+VERIFY_TOKEN=your_verify_token
+MONGODB_URI=your_mongodb_uri
+ADMINS=your_facebook_id
+```
+>>>>>>> 6590e5687fd16e076ec192408df9b73ccbc7977f
 
 ---
 
 ## 🚀 Deployment
 
-**1. Install Dependencies**
 ```bash
 npm install
-```
-
-**2. Start Application**
-```bash
 node index.js
 ```
 
@@ -123,6 +154,7 @@ node index.js
 
 ---
 
+<<<<<<< HEAD
 ## 🤖 Features
 
 ### 🧠 AI Commands
@@ -182,11 +214,54 @@ Want to test it? Message the bot directly:
 3. Make your changes
 4. Test thoroughly
 5. Submit a pull request
+=======
+## 🤖 Commands
+
+### 🧠 Artificial Intelligence
+- `amdus` — Main AI engine with image analysis
+- `gemini` — Google Gemini integration
+- `copilot` — Microsoft Copilot with web search
+- `perplexity` — Deep reasoning AI
+- `venice` — Precise AI model
+- `webpilot` — Web search AI assistant
+- `you` — You.com AI search
+- `sim` — SimSimi chatbot
+
+### 🎬 Media Tools
+- `alldl` — Universal media downloader
+- `pinterest` — Image search
+- `screenshot` — Website preview capture
+- `dalle` — AI image generation
+- `gmage` — Google image search
+- `lyrics` — Song lyrics fetcher
+- `nasa` — NASA space photo of the day
+
+### 🛠️ Utilities
+- `tempmail` — Disposable email generator
+- `remind` — Scheduled reminders
+- `trans` — Text translation with audio
+- `dict` — Dictionary and slang definitions
+- `google` — Google web search
+- `wiki` — Wikipedia search
+- `wolfram` — Computational knowledge
+- `pokemon` — Pokédex lookup
+- `joke` — Random jokes
+- `48laws` — 48 Laws of Power
+
+### 🛡️ Administration
+- `stats` — System metrics
+- `getuser` — User database management
+- `ban/unban` — User access control
+- `broadcast` — Global announcements
+- `maintenance` — Toggle maintenance mode
+- `cmd` — Enable/disable commands
+>>>>>>> 6590e5687fd16e076ec192408df9b73ccbc7977f
 
 ---
 
 ## 📄 License
 
+<<<<<<< HEAD
 MIT License. You're free to use, modify, and distribute this software.
 
 ---
@@ -244,4 +319,17 @@ If you need help:
 <div align="center">
     <br>
     Open-source by Sethdico
+=======
+MIT License — Free to use, modify, and distribute.
+
+---
+
+## 👍 Like & Review
+
+If you find this project useful, please star the repository and follow the [Facebook page](https://www.facebook.com/profile.php?id=61585331824038).
+
+<div align="center">
+  <br>
+  Open-source and maintained by Sethdico.
+>>>>>>> 6590e5687fd16e076ec192408df9b73ccbc7977f
 </div>

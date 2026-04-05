@@ -4,7 +4,7 @@ module.exports.config = {
     name: "wolfram",
     author: "sethdico",
     category: "Utility",
-    description: "computational knowledge search",
+    description: "solve math problems and get computational answers",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -15,7 +15,14 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const input = args.join(" ");
     
     if (!input) {
-        return reply("🧮 **wolfram alpha guide**\n━━━━━━━━━━━━━━━━\nhow to use:\n  wolfram <query>\n\nexample:\n  wolfram derivative of x^2\n  wolfram distance to moon");
+        return reply(`𝗪𝗢𝗟𝗙𝗥𝗔𝗠 𝗔𝗟𝗣𝗛𝗔
+
+usage:
+wolfram <query>
+
+example:
+wolfram derivative of x^2
+wolfram distance to moon`);
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, id);
@@ -33,14 +40,14 @@ module.exports.run = async function ({ event, args, api, reply }) {
 
         const data = res.data.queryresult;
         
-        if (!data.success || data.error) return reply("wolfram couldn't calculate that.");
+        if (!data.success || data.error) return reply("wolfram couldn't calculate that");
 
         const output = data.pods.map(pod => {
             const text = pod.subpods.map(s => s.plaintext).filter(Boolean).join("\n");
-            return text ? `📌 **${pod.title}**\n${text}` : "";
+            return text ? `${pod.title}\n${text}` : "";
         }).filter(Boolean).join("\n\n");
 
-        if (!output) return reply("no clear results found.");
+        if (!output) return reply("no clear results found");
 
         await api.sendMessage(output.toLowerCase(), id);
 
@@ -53,7 +60,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         });
 
     } catch (e) {
-        reply("wolfram service is offline.");
+        reply("wolfram service is offline");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, id);
     }

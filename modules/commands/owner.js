@@ -1,14 +1,12 @@
 module.exports.config = {
     name: "owner",
     author: "sethdico",
-    version: "3.0",
     category: "Utility",
-    description: "about the developer",
+    description: "bot developer info",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
-    aliases: ["creator", "dev", "seth"],
-    usage: "owner"
+    aliases: ["creator", "dev", "seth"]
 };
 
 module.exports.run = async function ({ event, api, reply }) {

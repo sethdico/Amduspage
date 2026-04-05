@@ -15,7 +15,15 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const apiKey = process.env.SIMSIMI_API_KEY || "3c911401e5f5452fb6585f0ccb97cdb31b30ddec";
 
     if (!args[0]) {
-        return reply("🐥 **simsimi chat**\n━━━━━━━━━━━━━━━━\nhow to use:\n  sim <message>\n  sim teach <question> | <answer>\n\nexample:\n  sim how are you?\n  sim teach who is seth? | my developer");
+        return reply(`𝗦𝗜𝗠𝗦𝗜𝗠𝗜 𝗖𝗛𝗔𝗧
+
+usage:
+sim <message>
+sim teach <question> | <answer>
+
+example:
+sim how are you?
+sim teach who is seth? | my developer`);
     }
 
     if (args[0] === "teach") {
@@ -23,13 +31,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
         if (!content.includes("|")) return reply("wrong format. use: sim teach question | answer");
         
         const [ask, ans] = content.split("|").map(s => s.trim());
-        if (!ask || !ans) return reply("provide both a question and an answer.");
+        if (!ask || !ans) return reply("provide both a question and an answer");
 
         try {
             await http.get("https://simsimi.ooguy.com/teach", { params: { ask, ans, apikey: apiKey } });
-            return reply(`learned it. if u say "${ask}", i'll say "${ans}".`);
+            return reply(`learned it. if u say "${ask}", i'll say "${ans}"`);
         } catch (e) {
-            return reply("couldn't learn that right now.");
+            return reply("couldn't learn that right now");
         }
     }
 
@@ -43,7 +51,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const response = res.data.respond || "idk what to say to that.";
         reply(response.toLowerCase());
     } catch (e) {
-        reply("simsimi is sleeping.");
+        reply("simsimi is sleeping");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, id);
     }

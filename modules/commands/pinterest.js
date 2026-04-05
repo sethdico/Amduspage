@@ -6,7 +6,7 @@ module.exports.config = {
     author: "sethdico",
     version: "1.2",
     category: "Media",
-    adminOnly: false,
+    description: "search and download images from Pinterest",
     usePrefix: false,
     cooldown: 10,
 };
@@ -15,7 +15,17 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const senderID = event.sender.id;
 
     if (!args.length) {
-        return reply("📌 **pinterest guide**\n━━━━━━━━━━━━━━━━\nhow to use:\n  pin <search>\n  pin <search> <count>\n\nexamples:\n  pin aesthetic room 5\n  pin anime wallpapers\n\nnote: maximum is 10 images.");
+        return reply(`𝗣𝗜𝗡𝗧𝗘𝗥𝗘𝗦𝗧
+
+usage:
+pin <search>
+pin <search> <count>
+
+examples:
+pin aesthetic room 5
+pin anime wallpapers
+
+note: maximum is 10 images`);
     }
 
     let count = 5;
@@ -39,10 +49,10 @@ module.exports.run = async function ({ event, args, api, reply }) {
         const images = res.data.data;
 
         if (!images || !images.length) {
-            return reply("couldn't find any images for that search.");
+            return reply("couldn't find any images for that search");
         }
 
-        reply(`📷 found ${Math.min(images.length, count)} images. sending them now...`);
+        reply(`found ${Math.min(images.length, count)} images. sending them now...`);
 
         images.slice(0, count).forEach((img, index) => {
             setTimeout(() => {
@@ -51,6 +61,6 @@ module.exports.run = async function ({ event, args, api, reply }) {
         });
 
     } catch (e) {
-        reply("pinterest service is currently unavailable.");
+        reply("pinterest service is currently unavailable");
     }
 };

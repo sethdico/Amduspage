@@ -11,6 +11,7 @@ module.exports.config = {
 };
 
 module.exports.run = async function ({ event, api }) {
+<<<<<<< HEAD
     try {
         const res = await http.get("https://official-joke-api.appspot.com/random_joke");
         const msg = `${res.data.setup}\n\n${res.data.punchline}`;
@@ -20,4 +21,13 @@ module.exports.run = async function ({ event, api }) {
     } catch (e) {
         api.sendMessage("joke server is down", event.sender.id);
     }
+=======
+  try {
+    const res = await http.get("https://official-joke-api.appspot.com/random_joke");
+    const msg = `𝗝𝗢𝗞𝗘\n\n${res.data.setup}\n\n${res.data.punchline}`;
+    api.sendMessage(msg, event.sender.id);
+  } catch (e) {
+    api.sendMessage("joke api is down", event.sender.id);
+  }
+>>>>>>> 6590e5687fd16e076ec192408df9b73ccbc7977f
 };

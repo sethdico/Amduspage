@@ -16,7 +16,13 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const input = args.join(" ").trim();
     
     if (!input) {
-        return reply("🌐 **webpilot**\n━━━━━━━━━━━━━━━━\nhow to use:\n  webpilot <query>\n\nexample:\n  webpilot latest tech news today");
+        return reply(`𝗪𝗘𝗕𝗣𝗜𝗟𝗢𝗧
+
+usage:
+webpilot <query>
+
+example:
+webpilot latest tech news today`);
     }
     
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, senderID);
@@ -28,11 +34,11 @@ module.exports.run = async function ({ event, args, api, reply }) {
         });
         
         const result = parseAI(res);
-        if (!result) return reply("couldn't get a response.");
+        if (!result) return reply("couldn't get a response");
         
-        await api.sendMessage(`🌐 **webpilot**\n\n${result}`.toLowerCase(), senderID);
+        await api.sendMessage(`webpilot:\n${result}`.toLowerCase(), senderID);
     } catch (e) {
-        reply("webpilot is down right now.");
+        reply("webpilot is down right now");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
     }

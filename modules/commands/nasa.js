@@ -5,7 +5,7 @@ module.exports.config = {
     author: "sethdico",
     version: "2.2",
     category: "Fun",
-    description: "space photo of the day",
+    description: "get NASA's astronomy picture of the day",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -15,10 +15,17 @@ module.exports.run = async function ({ event, args, api, reply }) {
     const senderID = event.sender.id;
     const apiKey = process.env.NASA_API_KEY;
 
-    if (!apiKey) return reply("nasa api key is missing.");
+    if (!apiKey) return reply("nasa api key is missing");
 
     if (!args[0]) {
-        return reply("🚀 **nasa apod**\n━━━━━━━━━━━━━━━━\nhow to use:\n  nasa - today's photo\n  nasa random - random photo\n\nexample:\n  nasa random");
+        return reply(`𝗡𝗔𝗦𝗔 𝗔𝗣𝗢𝗗
+
+usage:
+nasa - today's photo
+nasa random - random photo
+
+example:
+nasa random`);
     }
 
     let url = `https://api.nasa.gov/planetary/apod?api_key=${apiKey}`;
@@ -34,7 +41,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
             ? data.explanation.substring(0, 297) + "..." 
             : data.explanation;
 
-        const msg = `🌌 **${data.title}**\n📅 ${data.date}\n\n${description}`;
+        const msg = `${data.title}\n${data.date}\n\n${description}`;
 
         if (data.media_type === "image") {
             await api.sendAttachment("image", data.hdurl || data.url, senderID);
@@ -44,7 +51,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
         await api.sendButton(msg.toLowerCase(), btns, senderID);
 
     } catch (e) {
-        reply("nasa api is sleeping.");
+        reply("nasa api is sleeping");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, senderID);
     }

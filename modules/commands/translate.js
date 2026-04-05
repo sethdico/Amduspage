@@ -24,7 +24,7 @@ module.exports.config = {
     author: "sethdico",
     version: "4.1",
     category: "Utility",
-    description: "translate text to different languages",
+    description: "translate text between multiple languages with audio",
     adminOnly: false,
     usePrefix: false,
     cooldown: 2,
@@ -34,7 +34,17 @@ module.exports.run = async function ({ event, args, api }) {
   const id = event.sender.id;
   
   if (!args.length) {
-      return api.sendMessage("🌍 **translator**\n━━━━━━━━━━━━━━━━\nhow to use:\n  trans <text>\n  trans to <lang> <text>\n\nexamples:\n  trans to ja good morning\n  trans to es how are you\n\nnote: defaults to english or tagalog if no language is set.", id);
+      return api.sendMessage(`𝗧𝗥𝗔𝗡𝗦𝗟𝗔𝗧𝗢𝗥
+
+usage:
+trans <text>
+trans to <lang> <text>
+
+examples:
+trans to ja good morning
+trans to es how are you
+
+note: defaults to english or tagalog if no language is set`, id);
   }
 
   let targetLang = "en";
@@ -52,7 +62,7 @@ module.exports.run = async function ({ event, args, api }) {
       text = args.join(" ");
   }
 
-  if (!text) return api.sendMessage("provide text to translate.", id);
+  if (!text) return api.sendMessage("provide text to translate", id);
   if (api.sendTypingIndicator) api.sendTypingIndicator(true, id).catch(()=>{});
 
   try {
@@ -75,6 +85,6 @@ module.exports.run = async function ({ event, args, api }) {
     api.sendAttachment("audio", audioUrl, id).catch(()=>{});
 
   } catch (e) {
-    api.sendMessage("translation failed.", id);
+    api.sendMessage("translation failed", id);
   }
 };

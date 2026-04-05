@@ -4,7 +4,7 @@ module.exports.config = {
     name: "copilot",
     author: "sethdico",
     category: "AI",
-    description: "microsoft copilot with search & sources.",
+    description: "Microsoft Copilot AI with web search and sources",
     adminOnly: false,
     usePrefix: false,
     cooldown: 5,
@@ -24,7 +24,16 @@ module.exports.run = async function ({ event, args, api, reply }) {
     }
 
     if (!prompt) {
-        return reply("🚀 **copilot**\n━━━━━━━━━━━━━━━━\nhow to use:\n  copilot <prompt>\n  copilot -think <prompt>\n  copilot -gpt5 <prompt>\n\nexamples:\n  copilot what is a quantum computer\n  copilot -think solve this riddle");
+        return reply(`𝗖𝗢𝗣𝗜𝗟𝗢𝗧 𝗔𝗜
+
+usage:
+copilot <prompt>
+copilot -think <prompt>
+copilot -gpt5 <prompt>
+
+examples:
+copilot what is a quantum computer
+copilot -think solve this riddle`);
     }
 
     if (api.sendTypingIndicator) api.sendTypingIndicator(true, uid);
@@ -35,9 +44,9 @@ module.exports.run = async function ({ event, args, api, reply }) {
         });
 
         const result = res.data?.data;
-        if (!result || !result.text) return reply("i couldn't get an answer from copilot.");
+        if (!result || !result.text) return reply("couldn't get an answer from copilot");
 
-        await api.sendMessage(`🚀 **copilot**\n\n${result.text}`, uid);
+        await api.sendMessage(`copilot:\n${result.text}`, uid);
 
         if (result.citations && result.citations.length > 0) {
             const cards = result.citations.slice(0, 10).map(source => {
@@ -54,7 +63,7 @@ module.exports.run = async function ({ event, args, api, reply }) {
             await api.sendCarousel(cards, uid);
         }
     } catch (e) {
-        reply("copilot is having some issues right now.");
+        reply("copilot is having some issues right now");
     } finally {
         if (api.sendTypingIndicator) api.sendTypingIndicator(false, uid);
     }

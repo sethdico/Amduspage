@@ -27,25 +27,33 @@ module.exports.run = async function ({ reply }) {
             lastActive: { $gte: new Date(Date.now() - 3600000) } 
         });
         
-        const uptimeStr = `${Math.floor(uptime / 86400)}d ${Math.floor((uptime % 86400) / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`;
-        const memoryMB = (mem.heapUsed / 1024 / 1024).toFixed(2);
+        const upStr = `${Math.floor(uptime / 86400)}d ${Math.floor((uptime % 86400) / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`;
         
-        let message = `system statistics\n\n`;
-        message += `uptime: ${uptimeStr}\n`;
-        message += `memory: ${memoryMB}MB\n`;
-        message += `total users: ${totalUsers}\n`;
-        message += `active today: ${activeToday}\n`;
-        message += `active this hour: ${activeThisHour}\n\n`;
-        
-        if (topCmds && topCmds.length > 0) {
-            message += `top commands:\n`;
-            topCmds.slice(0, 5).forEach((cmd, i) => {
-                message += `${i + 1}. ${cmd._id}: ${cmd.count}\n`;
-            });
-        }
-        
-        reply(message);
+        const topList = topCmds.length 
+            ? topCmds.slice(0, 5).map((c, i) => `  ${i + 1}. ${c.command} (${c.count})`).join('\n') 
+            : "  none yet";
+
+        const msg = `system stats
+
+bot status
+  commands: ${global.client.commands.size}
+  sessions: ${global.sessions.size()}
+  banned: ${global.BANNED_USERS.size}
+
+user stats
+  total: ${totalUsers}
+  active (24h): ${activeToday}
+
+top commands
+${topList}
+
+system info
+  ram: ${(mem.heapUsed / 1024 / 1024).toFixed(1)}mb
+  uptime: ${upStr}
+  os: ${os.platform()} ${os.arch()}`;
+
+        reply(msg.toLowerCase());
     } catch (e) {
-        reply("failed to get stats");
+        reply("failed to load stats");
     }
 };
