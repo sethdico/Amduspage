@@ -4,7 +4,7 @@ const path = require('path');
 const requiredEnvVars = [
     'PAGE_ACCESS_TOKEN',
     'VERIFY_TOKEN',
-    'ADMIN_ID'
+    'ADMINS'
 ];
 
 const optionalEnvVars = [

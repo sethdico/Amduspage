@@ -46,7 +46,7 @@ tests/                  # Test files
 Required:
 - `PAGE_ACCESS_TOKEN` - Facebook Page access token
 - `VERIFY_TOKEN` - Webhook verification token
-- `ADMIN_ID` - Admin user IDs (comma-separated)
+- `ADMINS` - Admin user IDs (comma-separated)
 
 Optional:
 - `MONGODB_URI` - MongoDB connection string

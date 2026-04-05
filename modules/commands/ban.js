@@ -19,19 +19,11 @@ module.exports.run = async function ({ args, reply }) {
     let reason = args.slice(isUnban ? 2 : (action === "ban" ? 2 : 1)).join(" ") || "no reason";
 
     if (!targetID || isNaN(targetID)) {
-<<<<<<< HEAD
         return reply("to ban: ban <user id> <reason>\nto unban: unban <user id>");
     }
 
     if (global.ADMINS.has(targetID)) {
         return reply("can't ban an admin user");
-=======
-        return reply("𝗕𝗔𝗡\n\nusage:\nban <id> <reason>\nunban <id>");
-    }
-
-    if (global.ADMINS.has(targetID)) {
-        return reply("can't ban an admin");
->>>>>>> 6590e5687fd16e076ec192408df9b73ccbc7977f
     }
 
     if (isUnban) {
@@ -45,10 +37,6 @@ module.exports.run = async function ({ args, reply }) {
         global.BANNED_USERS.add(targetID);
         reply(`banned ${targetID}\nreason: ${reason}`.toLowerCase());
     } catch (e) {
-<<<<<<< HEAD
         reply("something went wrong while banning");
-=======
-        reply("failed to ban");
->>>>>>> 6590e5687fd16e076ec192408df9b73ccbc7977f
     }
 };

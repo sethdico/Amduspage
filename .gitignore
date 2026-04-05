@@ -7,14 +7,11 @@ lerna-debug.log*
 
 # Secrets and Configs
 .env
-<<<<<<< HEAD
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 config.json
-=======
->>>>>>> 6590e5687fd16e076ec192408df9b73ccbc7977f
 .vscode/
 
 # Root Cache (Ignore all temp files, but keep the folder alive via .gitkeep)
